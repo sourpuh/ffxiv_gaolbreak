@@ -21,7 +21,6 @@ internal class OverlayWindow : IDisposable
         ImGuiWindowFlags.NoResize;
 
     private readonly string name;
-    private readonly byte[] nameBytes;
     private readonly Action<ImDrawListPtr>? drawAction;
     private ImGuiWindowPtr cachedWindow;
     public ImGuiWindowFlags currentFlags;
@@ -30,19 +29,23 @@ internal class OverlayWindow : IDisposable
     {
         this.name = name;
         this.drawAction = drawAction;
-        nameBytes = Encoding.UTF8.GetBytes(name + "\0");
     }
 
-    public unsafe ImGuiWindow* GetNativeWindow()
+    public unsafe ImGuiWindowPtr GetNativeWindow()
     {
-        fixed (byte* p = nameBytes)
-            return CImGui.igFindWindowByName(p);
+        if (cachedWindow.IsNull)
+        {
+            var nameBytes = Encoding.UTF8.GetBytes(name + "\0");
+            fixed (byte* p = nameBytes)
+                cachedWindow = CImGui.igFindWindowByName(p);
+        }
+        return cachedWindow;
     }
 
     public virtual unsafe void BringToFront()
     {
         var w = GetNativeWindow();
-        if (w != null)
+        if (!w.IsNull)
             CImGui.igBringWindowToDisplayFront(w);
     }
 
