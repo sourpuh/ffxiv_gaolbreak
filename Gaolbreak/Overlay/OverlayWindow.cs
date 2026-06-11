@@ -2,7 +2,6 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using System.Numerics;
-using System.Text;
 
 namespace Gaolbreak.Overlay;
 
@@ -31,16 +30,7 @@ internal class OverlayWindow : IDisposable
         this.drawAction = drawAction;
     }
 
-    public unsafe ImGuiWindowPtr GetNativeWindow()
-    {
-        if (cachedWindow.IsNull)
-        {
-            var nameBytes = Encoding.UTF8.GetBytes(name + "\0");
-            fixed (byte* p = nameBytes)
-                cachedWindow = CImGui.igFindWindowByName(p);
-        }
-        return cachedWindow;
-    }
+    public ImGuiWindowPtr GetNativeWindow() => cachedWindow;
 
     public virtual unsafe void BringToFront()
     {
@@ -52,7 +42,7 @@ internal class OverlayWindow : IDisposable
     protected virtual ImGuiWindowFlags ExtraWindowFlags() => ImGuiWindowFlags.NoInputs;
     protected virtual void DrawContent(ImDrawListPtr drawList) => drawAction?.Invoke(drawList);
 
-    public void Draw()
+    public unsafe void Draw()
     {
         ImGuiHelpers.ForceNextWindowMainViewport();
         using var style = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, Vector2.Zero);
@@ -65,6 +55,8 @@ internal class OverlayWindow : IDisposable
         if (ImGui.Begin(name, DefaultFlags | currentFlags))
         {
             cachedWindow = ImGui.GetCurrentContext().CurrentWindow;
+            if (ImGui.IsWindowAppearing())
+                CImGui.igBringWindowToDisplayBack(cachedWindow);
             DrawContent(ImGui.GetWindowDrawList());
         }
         ImGui.End();

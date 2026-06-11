@@ -91,6 +91,7 @@ internal unsafe class UICapture : IDisposable
     private bool hooksEnabled;
     private string? blockedReason;
 
+    // TODO replace with CS textures
     public static readonly int[] RtmOffsetCandidates = [
         // UI Target / BackBuffer
         0x570,
@@ -173,20 +174,10 @@ internal unsafe class UICapture : IDisposable
     }
 
     public void DrawFgTexture(ImDrawListPtr drawlist)
-    {
-        // TODO move?
-        if (ImGui.IsWindowAppearing())
-            CImGui.igBringWindowToDisplayBack(CImGui.igGetCurrentWindow());
-        DrawTextureToDrawlist(drawlist, FgCapture.Handle);
-    }
+        => DrawTextureToDrawlist(drawlist, FgCapture.Handle);
 
     public void DrawBgTexture(ImDrawListPtr drawlist)
-    {
-        // TODO move?
-        if (ImGui.IsWindowAppearing())
-            CImGui.igBringWindowToDisplayBack(CImGui.igGetCurrentWindow());
-        DrawTextureToDrawlist(drawlist, BgCapture.Handle);
-    }
+        => DrawTextureToDrawlist(drawlist, BgCapture.Handle);
 
     public void DrawTextureToDrawlist(ImDrawListPtr drawList, nint textureHandle)
     {

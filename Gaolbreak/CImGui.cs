@@ -21,8 +21,4 @@ public unsafe partial class CImGui
     [LibraryImport("cimgui")]
     [UnmanagedCallConv(CallConvs = new Type[] { typeof(CallConvCdecl) })]
     public static partial ImGuiWindow* igGetCurrentWindow();
-
-    [LibraryImport("cimgui")]
-    [UnmanagedCallConv(CallConvs = new Type[] { typeof(CallConvCdecl) })]
-    public static partial ImGuiWindow* igFindWindowByName(byte* name);
 }

@@ -91,6 +91,7 @@ public sealed class Plugin : IDalamudPlugin
         depthManager.RestoreAll();
         fgOverlay.Dispose();
         bgOverlay.Dispose();
+        indicator.Dispose();
         windowSystem.RemoveAllWindows();
         capture.Dispose();
         captureWriter.Dispose();
