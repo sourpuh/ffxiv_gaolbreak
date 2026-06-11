@@ -213,7 +213,7 @@ internal unsafe class UICapture : IDisposable
 
     private void AtkServerDrawDetour(void* self, bool a2)
     {
-        bool capture = Plugin.Enable && CaptureAllowed() && lastRtContext != null;
+        bool capture = Plugin.Enable && lastRtContext != null;
         captureActive = capture;
 
         if (CollectDiagnostics) { rtmSnapshot = ""; queueSequenceCapture = ""; }

@@ -19,6 +19,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static ICondition Condition { get; private set; } = null!;
     [PluginService] internal static IClientState ClientState { get; private set; } = null!;
     [PluginService] internal static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
+    [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
     private const string CommandName = "/gbui";
 
@@ -74,7 +75,6 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.DisableAutomaticUiHide = true;
         PluginInterface.UiBuilder.Draw += OnDraw;
         PluginInterface.UiBuilder.OpenConfigUi += OpenConfig;
-
         AddonLifecycle.RegisterListener(AddonEvent.PreDraw, DepthManager.ContinuousReapplyAddons, depthManager.OnContinuousReapplyAddonPreDraw);
         AddonLifecycle.RegisterListener(AddonEvent.PreRequestedUpdate, "NamePlate", depthManager.OnNamePlateRequestedUpdate);
         AddonLifecycle.RegisterListener(AddonEvent.PostShow, depthManager.OnAddonPostShow);
@@ -84,7 +84,7 @@ public sealed class Plugin : IDalamudPlugin
         fgOverlay.OnAddonLmbDown += windowManager.QueuePinLift;
         fgOverlay.OnWindowLmbDown += depthManager.OnWindowLmbDown;
         fgOverlay.OnAddonLmbDown += depthManager.OnAddonLmbDown;
-
+        Framework.Update += Update;
         CommandManager.AddHandler(CommandName, new CommandInfo((_, _) => OpenConfig())
         {
             HelpMessage = "Toggle the Config window.",
@@ -93,6 +93,8 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        PluginInterface.UiBuilder.Draw -= OnDraw;
+        PluginInterface.UiBuilder.OpenConfigUi -= OpenConfig;
         AddonLifecycle.UnregisterListener(depthManager.OnAddonPostShow);
         AddonLifecycle.UnregisterListener(depthManager.OnContinuousReapplyAddonPreDraw);
         AddonLifecycle.UnregisterListener(depthManager.OnNamePlateRequestedUpdate);
@@ -102,13 +104,12 @@ public sealed class Plugin : IDalamudPlugin
         fgOverlay.OnAddonLmbDown -= windowManager.QueuePinLift;
         fgOverlay.OnWindowLmbDown -= depthManager.OnWindowLmbDown;
         fgOverlay.OnAddonLmbDown -= depthManager.OnAddonLmbDown;
+        Framework.Update -= Update;
+        CommandManager.RemoveHandler(CommandName);
 
         depthManager.RestoreAll();
         fgOverlay.Dispose();
         bgOverlay.Dispose();
-        CommandManager.RemoveHandler(CommandName);
-        PluginInterface.UiBuilder.Draw -= OnDraw;
-        PluginInterface.UiBuilder.OpenConfigUi -= OpenConfig;
         windowSystem.RemoveAllWindows();
         capture.Dispose();
         captureWriter.Dispose();
@@ -124,7 +125,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OpenConfig() => configWindow.IsOpen = !configWindow.IsOpen;
 
-    private void OnDraw()
+    internal void Update(IFramework framework)
     {
         capture.Update();
         capture.CollectDiagnostics = configWindow.IsOpen;
@@ -132,9 +133,12 @@ public sealed class Plugin : IDalamudPlugin
         if (Enable)
         {
             captureWriter.Write(capture);
-            depthManager.Update();            
+            depthManager.Update();
         }
+    }
 
+    private void OnDraw()
+    {
         windowManager.Update();
         try
         {
