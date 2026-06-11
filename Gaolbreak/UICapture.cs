@@ -92,20 +92,14 @@ internal unsafe class UICapture : IDisposable
     private string? blockedReason;
 
     // TODO replace with CS textures
-    public static readonly int[] RtmOffsetCandidates = [
+    public static readonly int[] RtmMatchOffsets = [
         // UI Target / BackBuffer
         0x570,
         // Gamma / Color Filter Target
         0x370
     ];
-    public int[] RtmMatchOffsets = (int[])RtmOffsetCandidates.Clone();
 
     private int fgBinds, bgBinds;
-    private int fgBindsLast, bgBindsLast;
-    // TODO update to FG after BG binds >=1 ?
-    public int BgOrdinal = 1;
-    public int FgOrdinal = 2;
-    public bool Gt = true;
 
     // Diagnostics
     public bool CollectDiagnostics;
@@ -347,7 +341,7 @@ internal unsafe class UICapture : IDisposable
             {
                 rtmTex = "";
                 byte* rtm = (byte*)FFXIVClientStructs.FFXIV.Client.Graphics.Render.RenderTargetManager.Instance();
-                foreach (var offset in RtmOffsetCandidates)
+                foreach (var offset in RtmMatchOffsets)
                 {
                     var tex = (Texture*)*(nint*)(rtm + offset);
                     if (tex != null)
@@ -359,8 +353,6 @@ internal unsafe class UICapture : IDisposable
         if (command->RenderTarget0 == sentinelEnd)
         {
             targetDetourArmed = false;
-            fgBindsLast = fgBinds;
-            bgBindsLast = bgBinds;
             if (!fgCleared) FgCapture.Clear();
             if (!bgCleared) BgCapture.Clear();
             return;
@@ -429,15 +421,8 @@ internal unsafe class UICapture : IDisposable
                 applySequenceCapture += $"{type}:0x{RtmOffset(command->RenderTarget0):X} | ";
             }
 
-            if (isBackground && bgBinds != BgOrdinal) return;
-            if (Gt)
-            {
-                if (!isBackground && fgBinds < FgOrdinal) return;
-            }
-            else
-            {
-                if (!isBackground && fgBinds != FgOrdinal) return;
-            }
+            // The UI pass binds FG once before BG; only the binds after BG are the real FG.
+            if (!isBackground && bgBinds < 1) return;
 
             EnsureCapture(target, command->RenderTarget0);
 

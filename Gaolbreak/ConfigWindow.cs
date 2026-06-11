@@ -90,19 +90,9 @@ internal sealed class ConfigWindow : Window
         DrawCapturePane(capture.FgCapture);
 
         ImGui.EndTable();
-        DrawCaptureConfig();
         DrawCaptureDiagnostics();
         DrawMouseDiagnostics();
     }
-
-    private static int[] ToggleOffset(int[] current, int offset, bool on)
-    {
-        var set = new List<int>(current);
-        if (on) { if (!set.Contains(offset)) set.Add(offset); }
-        else set.Remove(offset);
-        return [.. set];
-    }
-
 
     private static void DrawCapturePane(CaptureTarget capture)
     {
@@ -117,30 +107,6 @@ internal sealed class ConfigWindow : Window
             float paneWidth = ImGui.GetContentRegionAvail().X;
             ImGui.Image((ImTextureID)(ulong)capture.Handle, new Vector2(paneWidth, paneWidth * capture.Aspect));
         }
-    }
-
-
-    private void DrawCaptureConfig()
-    {
-        if (!ImGui.CollapsingHeader("Config"))
-            return;
-
-        ImGui.TextUnformatted("RTM Offset matchers:");
-        foreach (var off in RtmOffsetCandidates)
-        {
-            ImGui.SameLine();
-            bool on = Array.IndexOf(capture.RtmMatchOffsets, off) >= 0;
-            if (ImGui.Checkbox($"0x{off:X3}", ref on))
-                capture.RtmMatchOffsets = ToggleOffset(capture.RtmMatchOffsets, off, on);
-        }
-
-        int bgOrd = capture.BgOrdinal, fgOrd = capture.FgOrdinal;
-        ImGui.SetNextItemWidth(120);
-        if (ImGui.InputInt("BG ordinal", ref bgOrd)) capture.BgOrdinal = bgOrd;
-        ImGui.SetNextItemWidth(120);
-        if (ImGui.InputInt("FG ordinal", ref fgOrd)) capture.FgOrdinal = fgOrd;
-        ImGui.SameLine();
-        ImGui.Checkbox("+", ref capture.Gt);
     }
 
     private void DrawCaptureDiagnostics()
