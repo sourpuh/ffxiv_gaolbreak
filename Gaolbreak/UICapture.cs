@@ -89,6 +89,7 @@ internal unsafe class UICapture : IDisposable
     private bool bgCleared;
     private bool captureActive;
     private bool hooksEnabled;
+    private string? blockedReason;
 
     public static readonly int[] RtmOffsetCandidates = [
         // UI Target / BackBuffer
@@ -243,7 +244,8 @@ internal unsafe class UICapture : IDisposable
 
     public void Update()
     {
-        bool allowed = config.Enable && CaptureAllowed();
+        blockedReason = ComputeBlockedReason();
+        bool allowed = config.Enable && blockedReason == null;
 
         if (allowed != hooksEnabled)
         {
@@ -257,21 +259,7 @@ internal unsafe class UICapture : IDisposable
             captureActive = false;
     }
 
-    private bool CaptureAllowed()
-    {
-        try
-        {
-            return Plugin.ClientState.IsLoggedIn
-                && Plugin.ObjectTable.LocalPlayer != null
-                && !IsZoning()
-                && !Plugin.GameGui.GameUiHidden
-                && !IsInCutscene()
-                && !IsFaded();
-        }
-        catch { return false; }
-    }
-
-    public string? InactiveReason()
+    private static string? ComputeBlockedReason()
     {
         try
         {
@@ -281,14 +269,20 @@ internal unsafe class UICapture : IDisposable
             if (Plugin.GameGui.GameUiHidden) return "UI hidden";
             if (IsInCutscene()) return "Cutscene";
             if (IsFaded()) return "Faded";
-            if (FgCapture.IsNull) return "No capture";
-            if (!UiFresh) return "Stale";
             return null;
         }
         catch (Exception e)
         {
             return e.GetType().Name;
         }
+    }
+
+    public string? InactiveReason()
+    {
+        if (blockedReason != null) return blockedReason;
+        if (FgCapture.IsNull) return "No capture";
+        if (!UiFresh) return "Stale";
+        return null;
     }
 
     private static bool IsZoning()
