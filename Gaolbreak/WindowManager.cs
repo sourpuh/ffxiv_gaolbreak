@@ -7,7 +7,7 @@ using System.Numerics;
 
 namespace Gaolbreak;
 
-internal unsafe class WindowManager(PinsConfig pins)
+internal unsafe class WindowManager(Config config)
 {
     // back-to-front
     private readonly List<ImGuiWindowPtr> drawOrder = new();
@@ -18,8 +18,6 @@ internal unsafe class WindowManager(PinsConfig pins)
     private OverlayWindow bgOverlay = null!;
     private OverlayWindow indicator = null!;
     private ImGuiWindowPtr lastFocusedWindow;
-
-    public PinsConfig Pins => pins;
 
     public void InitOverlays(OverlayWindow fgOverlay, OverlayWindow bgOverlay, OverlayWindow indicator)
     {
@@ -68,7 +66,7 @@ internal unsafe class WindowManager(PinsConfig pins)
     public void QueuePinLift(string? addonName)
     {
         if (string.IsNullOrEmpty(addonName)) return;
-        foreach (var id in pins.GetPinnedWindows(addonName))
+        foreach (var id in config.GetPinnedWindows(addonName))
         {
             pendingLifts.Add(id);
         }

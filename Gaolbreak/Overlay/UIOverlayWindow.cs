@@ -12,6 +12,7 @@ internal unsafe class UIOverlayWindow : OverlayWindow
     private delegate void GetAddonCollisionDelegate(AtkUnitManager* self, AddonCollision* collisionInfo, short x, short y);
     private readonly Hook<GetAddonCollisionDelegate>? hook;
     private readonly WindowManager windowManager;
+    private readonly Config config;
     private AtkUnitBase* trueIntersecting;
     private enum PressOwner { None, Window, Game }
     private PressOwner pressOwner;
@@ -26,9 +27,10 @@ internal unsafe class UIOverlayWindow : OverlayWindow
     public event Action<string>? OnWindowLmbDown;
     public event Action<string>? OnAddonLmbDown;
 
-    public UIOverlayWindow(string name, Action<ImDrawListPtr> drawAction, IGameInteropProvider hooker, WindowManager windowManager)
+    public UIOverlayWindow(string name, Config config, Action<ImDrawListPtr> drawAction, IGameInteropProvider hooker, WindowManager windowManager)
         : base(name, drawAction)
     {
+        this.config = config;
         this.windowManager = windowManager;
         try
         {
@@ -136,7 +138,7 @@ internal unsafe class UIOverlayWindow : OverlayWindow
     {
         hook!.Original(self, collisionInfo, x, y);
         trueIntersecting = collisionInfo->UnitBase;
-        if (Plugin.Enable && WindowOwnsCursor(x, y))
+        if (config.Enable && WindowOwnsCursor(x, y))
         {
             collisionInfo->UnitBase = null;
             collisionInfo->CollisionNode = null;
@@ -169,7 +171,7 @@ internal unsafe class UIOverlayWindow : OverlayWindow
         io.WantCaptureMouseUnlessPopupClose = false;
         ImGui.SetNextFrameWantCaptureMouse(false);
 
-        if (Plugin.EnableReorder && lmbJustPressed && trueIntersecting != null)
+        if (config.EnableReorder && lmbJustPressed && trueIntersecting != null)
         {
             BringToFront();
         }

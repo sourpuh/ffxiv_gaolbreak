@@ -23,20 +23,6 @@ public sealed class Plugin : IDalamudPlugin
 
     private const string CommandName = "/gbui";
 
-    public static event Action<bool>? OnEnableChanged;
-    public static bool Enable
-    {
-        get;
-        set
-        {
-            if (field == value) return;
-            field = value;
-            OnEnableChanged?.Invoke(value);
-        }
-    }
-
-    public static bool EnableReorder = true;
-    public static bool EnableIndicator = true;
     private bool liftFgOverlay;
     // Last frame's CaptureActive - prevents one frame UI loss when capture is disabled.
     private bool prevCaptureActive;
@@ -51,24 +37,19 @@ public sealed class Plugin : IDalamudPlugin
     private readonly IndicatorWindow indicator;
     private readonly ConfigWindow configWindow;
     private readonly Config config;
-    private readonly PinsConfig pins;
 
     public Plugin()
     {
-        config = PluginInterface.GetPluginConfig() as Config ?? new Config();
-        pins = new(PluginInterface, config);
-        windowManager = new(pins);
-
-        Enable = true;
-
-        depthManager = new DepthManager(GameGui);
-        capture = new UICapture();
+        config = new(PluginInterface);
+        windowManager = new(config);
+        depthManager = new DepthManager(config, GameGui);
+        capture = new UICapture(config);
         captureWriter = new SharedCaptureWriter();
         var name = PluginInterface.InternalName;
-        fgOverlay = new UIOverlayWindow($"###{name}ForegroundOverlay", capture.DrawFgTexture, Hooker, windowManager);
+        fgOverlay = new UIOverlayWindow($"###{name}ForegroundOverlay", config, capture.DrawFgTexture, Hooker, windowManager);
         bgOverlay = new OverlayWindow($"###{name}BackgroundOverlay", capture.DrawBgTexture);
-        indicator = new IndicatorWindow($"###{name}Indicator", capture, OpenConfig);
-        configWindow = new ConfigWindow($"{name}##Config", capture, fgOverlay, bgOverlay, depthManager, windowManager);
+        indicator = new IndicatorWindow($"###{name}Indicator", config, capture, OpenConfig);
+        configWindow = new ConfigWindow($"{name}##Config", config, capture, fgOverlay, bgOverlay, depthManager, windowManager);
         windowSystem.AddWindow(configWindow);
         windowManager.InitOverlays(fgOverlay, bgOverlay, indicator);
 
@@ -80,7 +61,7 @@ public sealed class Plugin : IDalamudPlugin
         AddonLifecycle.RegisterListener(AddonEvent.PostShow, depthManager.OnAddonPostShow);
         AddonLifecycle.RegisterListener(AddonEvent.PostShow, windowManager.OnAddonPostShow);
         depthManager.OnForegroundAddonShown += OnForegroundAddonShown;
-        OnEnableChanged += OnEnableChangedHandler;
+        config.OnEnableChanged += OnEnableChangedHandler;
         fgOverlay.OnAddonLmbDown += windowManager.QueuePinLift;
         fgOverlay.OnWindowLmbDown += depthManager.OnWindowLmbDown;
         fgOverlay.OnAddonLmbDown += depthManager.OnAddonLmbDown;
@@ -100,7 +81,7 @@ public sealed class Plugin : IDalamudPlugin
         AddonLifecycle.UnregisterListener(depthManager.OnNamePlateRequestedUpdate);
         AddonLifecycle.UnregisterListener(windowManager.OnAddonPostShow);
         depthManager.OnForegroundAddonShown -= OnForegroundAddonShown;
-        OnEnableChanged -= OnEnableChangedHandler;
+        config.OnEnableChanged -= OnEnableChangedHandler;
         fgOverlay.OnAddonLmbDown -= windowManager.QueuePinLift;
         fgOverlay.OnWindowLmbDown -= depthManager.OnWindowLmbDown;
         fgOverlay.OnAddonLmbDown -= depthManager.OnAddonLmbDown;
@@ -130,7 +111,7 @@ public sealed class Plugin : IDalamudPlugin
         capture.Update();
         capture.CollectDiagnostics = configWindow.IsOpen;
 
-        if (Enable)
+        if (config.Enable)
         {
             captureWriter.Write(capture);
             depthManager.Update();
@@ -145,7 +126,7 @@ public sealed class Plugin : IDalamudPlugin
             windowSystem.Draw();
 
             indicator.Draw();
-            if (!Enable)
+            if (!config.Enable)
             {
                 return;
             }
@@ -157,7 +138,7 @@ public sealed class Plugin : IDalamudPlugin
                 fgOverlay.Draw();
                 bgOverlay.Draw();
 
-                if (EnableReorder && liftFgOverlay)
+                if (config.EnableReorder && liftFgOverlay)
                 {
                     liftFgOverlay = false;
                     fgOverlay.BringToFront();
@@ -167,7 +148,7 @@ public sealed class Plugin : IDalamudPlugin
             // Re-snapshot the draw order so EnforcePinned sees the overlay's just-applied bring-to-front.
             // TODO remove need for this?
             windowManager.Update();
-            if (EnableReorder)
+            if (config.EnableReorder)
                 windowManager.ProcessPinLifts();
         }
         catch (Exception e)
@@ -176,7 +157,7 @@ public sealed class Plugin : IDalamudPlugin
         }
         finally
         {
-            if (EnableIndicator)
+            if (config.EnableIndicator)
                 indicator.BringToFront();
         }
     }

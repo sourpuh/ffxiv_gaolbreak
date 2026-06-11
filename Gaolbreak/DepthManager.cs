@@ -7,7 +7,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace Gaolbreak;
 
-internal unsafe class DepthManager(IGameGui gameGui)
+internal unsafe class DepthManager(Config config, IGameGui gameGui)
 {
     private const float BackgroundDepth = 0.75f;
     private const float LayerDepthStep = 0.001f;
@@ -64,7 +64,7 @@ internal unsafe class DepthManager(IGameGui gameGui)
 
     public void OnContinuousReapplyAddonPreDraw(AddonEvent type, AddonArgs args)
     {
-        if (!Plugin.Enable) return;
+        if (!config.Enable) return;
         var addon = (AtkUnitBase*)args.Addon.Address;
         if (addon == null) return;
         Apply(addon, addon->NameString);
@@ -72,7 +72,7 @@ internal unsafe class DepthManager(IGameGui gameGui)
 
     public void OnNamePlateRequestedUpdate(AddonEvent type, AddonArgs args)
     {
-        if (!Plugin.Enable) return;
+        if (!config.Enable) return;
 
         var addon = (AtkUnitBase*)args.Addon.Address;
         if (addon == null) return;

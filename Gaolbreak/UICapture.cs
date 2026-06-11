@@ -69,6 +69,7 @@ internal unsafe class UICapture : IDisposable
         }
     }
 
+    private readonly Config config;
     private readonly SharpDX.Direct3D11.Device device;
     private readonly DeviceContext context;
 
@@ -117,8 +118,9 @@ internal unsafe class UICapture : IDisposable
 
     public bool CaptureActive => captureActive;
 
-    public UICapture()
+    public UICapture(Config config)
     {
+        this.config = config;
         device = new SharpDX.Direct3D11.Device((nint)Device.Instance()->D3D11Forwarder);
         context = device.ImmediateContext;
         FgCapture = new(context);
@@ -213,7 +215,7 @@ internal unsafe class UICapture : IDisposable
 
     private void AtkServerDrawDetour(void* self, bool a2)
     {
-        bool capture = Plugin.Enable && lastRtContext != null;
+        bool capture = config.Enable && lastRtContext != null;
         captureActive = capture;
 
         if (CollectDiagnostics) { rtmSnapshot = ""; queueSequenceCapture = ""; }
@@ -241,7 +243,7 @@ internal unsafe class UICapture : IDisposable
 
     public void Update()
     {
-        bool allowed = Plugin.Enable && CaptureAllowed();
+        bool allowed = config.Enable && CaptureAllowed();
 
         if (allowed != hooksEnabled)
         {
@@ -316,7 +318,7 @@ internal unsafe class UICapture : IDisposable
         steps.Add(HookStep("SetRenderTargets hook", QueueRenderTargetsHook));
         steps.Add(HookStep("AtkServerDraw hook", AtkServerDrawHook));
         steps.Add(HookStep("ApplySetTargetCommand hook", ApplySetTargetHook));
-        steps.Add(new("Killswitch on", Plugin.Enable, Plugin.Enable ? null : "click the indicator to re-enable"));
+        steps.Add(new("Killswitch on", config.Enable, config.Enable ? null : "click the indicator to re-enable"));
 
         try
         {

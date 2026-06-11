@@ -11,6 +11,7 @@ namespace Gaolbreak;
 internal sealed class ConfigWindow : Window
 {
     private const string NullAddonName = "(none)";
+    private readonly Config config;
     private readonly UICapture capture;
     private readonly UIOverlayWindow fgOverlay;
     private readonly OverlayWindow bgOverlay;
@@ -19,9 +20,10 @@ internal sealed class ConfigWindow : Window
 
     private bool filterWindows = true;
 
-    public ConfigWindow(string name, UICapture capture, UIOverlayWindow fgOverlay, OverlayWindow bgOverlay, DepthManager depthManager, WindowManager windowManager)
+    public ConfigWindow(string name, Config config, UICapture capture, UIOverlayWindow fgOverlay, OverlayWindow bgOverlay, DepthManager depthManager, WindowManager windowManager)
         : base(name)
     {
+        this.config = config;
         this.capture = capture;
         this.fgOverlay = fgOverlay;
         this.bgOverlay = bgOverlay;
@@ -35,13 +37,17 @@ internal sealed class ConfigWindow : Window
     public override void Draw()
     {
         var self = ImGui.GetCurrentContext().CurrentWindow;
-        bool enable = Plugin.Enable;
+        bool enable = config.Enable;
         if (ImGui.Checkbox("Draw Overlay", ref enable))
-            Plugin.Enable = enable;
+            config.Enable = enable;
         ImGui.SameLine();
-        ImGui.Checkbox("Reorder On Click", ref Plugin.EnableReorder);
+        bool reorder = config.EnableReorder;
+        if (ImGui.Checkbox("Reorder On Click", ref reorder))
+            config.EnableReorder = reorder;
         ImGui.SameLine();
-        ImGui.Checkbox("Indicator", ref Plugin.EnableIndicator);
+        bool indicator = config.EnableIndicator;
+        if (ImGui.Checkbox("Indicator", ref indicator))
+            config.EnableIndicator = indicator;
 
         if (!ImGui.BeginTabBar("##gbui_tabs")) return;
 
@@ -263,7 +269,7 @@ internal sealed class ConfigWindow : Window
         {
             using var id = ImRaii.PushId((int)w.ID);
             using var pinColor = ImRaii.PushColor(ImGuiCol.Text, normalText);
-            string? current = windowManager.Pins.GetPinnedAddon(w);
+            string? current = config.GetPinnedAddon(w);
             float resetWidth = ImGui.GetFrameHeight();
             float spacing = ImGui.GetStyle().ItemInnerSpacing.X;
             ImGui.SetNextItemWidth(-(resetWidth + spacing));
@@ -272,21 +278,21 @@ internal sealed class ConfigWindow : Window
                 if (combo)
                 {
                     if (ImGui.Selectable(NullAddonName, current is null))
-                        windowManager.Pins.SetOverride(w, null);
+                        config.SetPinOverride(w, null);
                     // Keep a pin whose addon isn't currently loaded selectable
                     if (current is not null && !pinOptions.Contains(current))
                         if (ImGui.Selectable($"{current} (not loaded)", true)) { }
                     foreach (var addon in pinOptions)
                         if (ImGui.Selectable(addon, addon == current))
-                            windowManager.Pins.SetOverride(w, addon);
+                            config.SetPinOverride(w, addon);
                 }
             }
             ImGui.SameLine(0, spacing);
-            using (ImRaii.Disabled(!windowManager.Pins.HasOverride(w)))
+            using (ImRaii.Disabled(!config.HasPinOverride(w)))
             {
                 using (ImRaii.PushFont(UiBuilder.IconFont))
                     if (ImGui.Button(FontAwesomeIcon.Undo.ToIconString(), new Vector2(resetWidth)))
-                        windowManager.Pins.RemoveOverride(w);
+                        config.RemovePinOverride(w);
             }
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip("Reset to default");

@@ -5,12 +5,14 @@ namespace Gaolbreak.Overlay;
 
 internal class IndicatorWindow : OverlayWindow
 {
+    private readonly Config config;
     private readonly UICapture capture;
     private readonly Action onRightClick;
 
-    public IndicatorWindow(string name, UICapture capture, Action onRightClick)
+    public IndicatorWindow(string name, Config config, UICapture capture, Action onRightClick)
         : base(name)
     {
+        this.config = config;
         this.capture = capture;
         this.onRightClick = onRightClick;
     }
@@ -19,10 +21,10 @@ internal class IndicatorWindow : OverlayWindow
 
     protected override void DrawContent(ImDrawListPtr dl)
     {
-        if (!Plugin.EnableIndicator) return;
+        if (!config.EnableIndicator) return;
 
         string? inactiveReason = capture.InactiveReason();
-        uint dotColor = !Plugin.Enable ? 0xFF2222DD
+        uint dotColor = !config.Enable ? 0xFF2222DD
                       : inactiveReason == null ? 0xFF22DD22
                       : 0xFF00FFFFu;
         const float dotRadius = 4f;
@@ -35,7 +37,7 @@ internal class IndicatorWindow : OverlayWindow
         bool rightClicked = ImGui.IsItemClicked(ImGuiMouseButton.Right);
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(!Plugin.Enable ? "Off" : inactiveReason == null ? "On" : inactiveReason);
+            ImGui.SetTooltip(!config.Enable ? "Off" : inactiveReason == null ? "On" : inactiveReason);
         }
 
         dl.AddCircleFilled(p + pad, dotRadius + 2, 0xB0000000u);
@@ -43,7 +45,7 @@ internal class IndicatorWindow : OverlayWindow
 
         if (leftClicked)
         {
-            Plugin.Enable = !Plugin.Enable;
+            config.Enable = !config.Enable;
         }
         if (rightClicked)
         {
