@@ -47,11 +47,18 @@ internal class PinsConfig(IDalamudPluginInterface pluginInterface, Config config
 
     public void SetOverride(ImGuiWindowPtr w, string? addon)
     {
+        bool hasDefault = DefaultPins.TryGetValue(w.ID, out var defaultAddon);
         bool changed;
-        if (addon == DefaultPins[w.ID])
+        if (hasDefault ? addon == defaultAddon : addon is null)
+        {
             changed = UserPins.Remove(w.ID);
+        }
         else
-            changed = UserPins.TryAdd(w.ID, addon ?? "");
+        {
+            var value = addon ?? "";
+            changed = !UserPins.TryGetValue(w.ID, out var existing) || existing != value;
+            UserPins[w.ID] = value;
+        }
         if (changed) Save();
     }
 
