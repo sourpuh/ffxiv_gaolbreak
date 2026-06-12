@@ -422,6 +422,7 @@ internal unsafe class UICapture : IDisposable
             }
 
             // The UI pass binds FG once before BG; only the binds after BG are the real FG.
+            if (isBackground && bgBinds != 1) return;
             if (!isBackground && bgBinds < 1) return;
 
             EnsureCapture(target, command->RenderTarget0);
