@@ -32,7 +32,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly WindowManager windowManager;
     private readonly DepthManager depthManager;
     private readonly UICapture capture;
-    private readonly SharedCaptureWriter captureWriter;
+    private readonly HeartbeatWriter heartbeat;
     private readonly UIOverlayWindow fgOverlay;
     private readonly OverlayWindow bgOverlay;
     private readonly IndicatorWindow indicator;
@@ -45,7 +45,7 @@ public sealed class Plugin : IDalamudPlugin
         windowManager = new(config);
         depthManager = new DepthManager(config, GameGui);
         capture = new UICapture(config);
-        captureWriter = new SharedCaptureWriter();
+        heartbeat = new HeartbeatWriter();
         var name = PluginInterface.InternalName;
         fgOverlay = new UIOverlayWindow($"###{name}ForegroundOverlay", config, capture.DrawFgTexture, Hooker, windowManager);
         bgOverlay = new OverlayWindow($"###{name}BackgroundOverlay", capture.DrawBgTexture);
@@ -99,7 +99,7 @@ public sealed class Plugin : IDalamudPlugin
         indicator.Dispose();
         windowSystem.RemoveAllWindows();
         capture.Dispose();
-        captureWriter.Dispose();
+        heartbeat.Dispose();
     }
 
     private void OnForegroundAddonShown() => liftFgOverlay = true;
@@ -119,7 +119,7 @@ public sealed class Plugin : IDalamudPlugin
 
         if (config.Enable)
         {
-            captureWriter.Write(capture);
+            if (capture.CaptureActive && capture.UiFresh) heartbeat.Tick();
             depthManager.Update();
         }
     }

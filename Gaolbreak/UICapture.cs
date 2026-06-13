@@ -72,7 +72,7 @@ internal unsafe class UICapture : IDisposable
     public string rtmTex = "";
 
     private long uiRedirectTick;
-    private const long StaleMs = 150;
+    private const long StaleMs = 50;
     public bool UiFresh => Environment.TickCount64 - uiRedirectTick < StaleMs;
 
     public bool CaptureActive => captureActive;
