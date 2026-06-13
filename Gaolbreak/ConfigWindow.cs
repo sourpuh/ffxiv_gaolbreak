@@ -98,7 +98,7 @@ internal sealed class ConfigWindow : Window
     {
         ImGui.TextUnformatted($"{capture.Width}x{capture.Height}");
 
-        if (capture.Tex == null)
+        if (capture.IsNull)
         {
             ImGui.TextDisabled("Waiting for capture.");
         }
@@ -115,10 +115,18 @@ internal sealed class ConfigWindow : Window
             return;
         var green = new Vector4(0.30f, 0.85f, 0.30f, 1f);
         var red = new Vector4(0.90f, 0.35f, 0.35f, 1f);
+        int row = 0;
         foreach (var step in capture.Diagnostics())
         {
+            row++;
             ImGui.TextColored(step.Ok ? green : red, step.Ok ? "[ok]" : "[xx]");
             ImGui.SameLine();
+            if (!string.IsNullOrEmpty(step.Detail))
+            {
+                if (ImGui.SmallButton($"copy##diag{row}"))
+                    ImGui.SetClipboardText($"{step.Label}: {step.Detail}");
+                ImGui.SameLine();
+            }
             ImGui.TextUnformatted(step.Detail != null ? $"{step.Label}  —  {step.Detail}" : step.Label);
         }
     }

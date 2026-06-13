@@ -1,4 +1,6 @@
 using Dalamud.Bindings.ImGui;
+using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -27,5 +29,18 @@ internal static class Extensions
         {
             return string.Join(", ", d.Select(kvp => $"{kvp.Key}={kvp.Value}"));
         }
+    }
+
+    extension(ref Context c)
+    {
+        public unsafe uint Key {
+            get => *(uint*)((byte*)Unsafe.AsPointer(ref c) + 8);
+            set => *(uint*)((byte*)Unsafe.AsPointer(ref c) + 8) = value;
+        }
+    }
+
+    extension(RenderCommandSetTarget command)
+    {
+        public unsafe Texture* RenderTarget0 => command.RenderTargets[0].Value;
     }
 }

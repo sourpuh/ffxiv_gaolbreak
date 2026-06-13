@@ -5,69 +5,31 @@ using Dalamud.Interface.Utility;
 using Dalamud.Utility.Signatures;
 using SharpDX.Direct3D11;
 using SharpDX.Mathematics.Interop;
-using System.Runtime.InteropServices;
+using AtkServer = FFXIVClientStructs.FFXIV.Component.GUI.AtkServer;
 using AtkUnitBase = FFXIVClientStructs.FFXIV.Component.GUI.AtkUnitBase;
+using Context = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Context;
 using Device = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device;
-using Format = SharpDX.DXGI.Format;
 using ImmediateContext = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.ImmediateContext;
+using RenderCommandSetTarget = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.RenderCommandSetTarget;
+using RenderTargetManager = FFXIVClientStructs.FFXIV.Client.Graphics.Render.RenderTargetManager;
 using Texture = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Texture;
 using TextureFlags = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.TextureFlags;
 using TextureFormat = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.TextureFormat;
+using ThreadLocals = FFXIVClientStructs.Interop.ThreadLocals;
 
 namespace Gaolbreak;
 
 internal unsafe class UICapture : IDisposable
 {
-    private delegate void AtkServerDrawDelegate(void* self, bool a2);
-    [Signature("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 54 41 56 41 57 48 83 EC 50 44 8B 05 ?? ?? ?? ??", DetourName = nameof(AtkServerDrawDetour))]
-    private readonly Hook<AtkServerDrawDelegate>? AtkServerDrawHook = null;
+    private delegate void AtkServerDrawDelegate(AtkServer* self, bool a2);
+    private readonly Hook<AtkServerDrawDelegate>? AtkServerDrawHook;
 
-    private delegate void QueueRenderTargetsDelegate(void* context, int count, Texture** renderTargets, Texture* depthBuffer, short a5, short a6, short a7, short a8);
-    [Signature("E8 ?? ?? ?? ?? 48 8B 45 F8", DetourName = nameof(QueueRenderTargetsDetour))]
-    private readonly Hook<QueueRenderTargetsDelegate>? QueueRenderTargetsHook = null;
+    private delegate void SetRenderTargetsDelegate(Context* context, int count, Texture** renderTargets, Texture* depthBuffer, short a5, short a6, short a7, short a8);
+    private readonly Hook<SetRenderTargetsDelegate>? SetRenderTargetsHook;
 
     private delegate void ApplySetTargetCommandDelegate(ImmediateContext* self, RenderCommandSetTarget* command);
-    [Signature("E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? 01 45 23", DetourName = nameof(ApplySetTargetCommandDetour))]
+    [Signature("E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? D1 47 23", DetourName = nameof(ApplySetTargetCommandDetour))]
     private readonly Hook<ApplySetTargetCommandDelegate>? ApplySetTargetHook = null;
-
-    [StructLayout(LayoutKind.Explicit, Size = 0x40)]
-    private struct RenderCommandSetTarget
-    {
-        [FieldOffset(0x8)] public Texture* RenderTarget0;
-        [FieldOffset(0x30)] public Texture* DepthBuffer;
-    }
-
-    internal sealed class CaptureTarget(DeviceContext Context) : IDisposable
-    {
-        public Texture2D? Tex;
-        public RenderTargetView? Rtv;
-        public ShaderResourceView? Srv;
-        public uint SrcWidth;
-        public uint SrcHeight;
-
-        public nint Handle => Srv?.NativePointer ?? nint.Zero;
-        public uint Width => (uint)(Tex?.Description.Width ?? 0);
-        public uint Height => (uint)(Tex?.Description.Height ?? 0);
-        public float Aspect => (float)Height / Width;
-        public bool IsNull => Tex == null;
-
-        public void Clear()
-        {
-            if (Rtv != null)
-                Context.ClearRenderTargetView(Rtv, new RawColor4(0, 0, 0, 0));
-        }
-
-        public void Dispose()
-        {
-            Srv?.Dispose();
-            Rtv?.Dispose();
-            Tex?.Dispose();
-            Srv = null;
-            Rtv = null;
-            Tex = null;
-            SrcWidth = SrcHeight = 0;
-        }
-    }
 
     private readonly Config config;
     private readonly SharpDX.Direct3D11.Device device;
@@ -83,23 +45,24 @@ internal unsafe class UICapture : IDisposable
 
     private Texture* sentinelStart = null;
     private Texture* sentinelEnd = null;
-    private void* lastRtContext = null;
-    private bool targetDetourArmed;
+    private Context* atkDrawCtx = null;
+    private uint uiStartKey;
+    private bool uiBindSeen;
+    private bool queueHookFired;
+    private bool inAtkServerDraw;
     private bool fgCleared;
     private bool bgCleared;
     private bool captureActive;
     private bool hooksEnabled;
     private string? blockedReason;
 
-    // TODO replace with CS textures
-    public static readonly int[] RtmMatchOffsets = [
-        // UI Target / BackBuffer
-        0x570,
-        // Gamma / Color Filter Target
-        0x370
-    ];
+    // Sort key layout (Context+8): layer<<28 | sublayer<<24 | seq24.
+    private const uint KeyLayerMask = 0xF0000000;
+    private const uint KeyInLayerMax = 0x0FFFFFFF;
+    private const uint KeySeqMax = 0x00FFFFFF;
 
-    private int fgBinds, bgBinds;
+    private const uint BgWindowStartKey = 0xCE000000;
+    private const uint BgWindowEndKey = BgWindowStartKey | KeySeqMax;
 
     // Diagnostics
     public bool CollectDiagnostics;
@@ -114,13 +77,21 @@ internal unsafe class UICapture : IDisposable
 
     public bool CaptureActive => captureActive;
 
+    private static RenderTargetManager* Rtm => RenderTargetManager.Instance();
+    private static bool IsExpectedTarget(Texture* rt)
+        => rt != null && (rt == Rtm->SwapChainBackBuffer || rt == Rtm->ToneAdjustSource);
+    private static string RtmName(Texture* rt)
+        => rt == Rtm->SwapChainBackBuffer ? "BackBuffer"
+            : rt == Rtm->ToneAdjustSource ? "ToneAdjustSrc"
+            : "?";
+
     public UICapture(Config config)
     {
         this.config = config;
         device = new SharpDX.Direct3D11.Device((nint)Device.Instance()->D3D11Forwarder);
         context = device.ImmediateContext;
-        FgCapture = new(context);
-        BgCapture = new(context);
+        FgCapture = new(device, context);
+        BgCapture = new(device, context);
 
         premultBlend = CreateBlend(BlendOption.One);
         straightBlend = CreateBlend(BlendOption.SourceAlpha);
@@ -128,6 +99,10 @@ internal unsafe class UICapture : IDisposable
         straightBlendCallback = (list, cmd) => { try { context.OutputMerger.SetBlendState(straightBlend, new RawColor4(0, 0, 0, 0), -1); } catch { } };
         try
         {
+            AtkServerDrawHook = Plugin.Hooker.HookFromAddress<AtkServerDrawDelegate>(
+                AtkServer.Addresses.Draw.Value, AtkServerDrawDetour);
+            SetRenderTargetsHook = Plugin.Hooker.HookFromAddress<SetRenderTargetsDelegate>(
+                Context.Addresses.SetRenderTargets.Value, SetRenderTargetsDetour);
             Plugin.Hooker.InitializeFromAttributes(this);
         }
         catch (Exception e)
@@ -138,7 +113,7 @@ internal unsafe class UICapture : IDisposable
 
     public void Dispose()
     {
-        QueueRenderTargetsHook?.Dispose();
+        SetRenderTargetsHook?.Dispose();
         AtkServerDrawHook?.Dispose();
         ApplySetTargetHook?.Dispose();
 
@@ -187,44 +162,107 @@ internal unsafe class UICapture : IDisposable
     {
         if (enabled)
         {
-            QueueRenderTargetsHook?.Enable();
+            SetRenderTargetsHook?.Enable();
             AtkServerDrawHook?.Enable();
             ApplySetTargetHook?.Enable();
         }
         else
         {
-            QueueRenderTargetsHook?.Disable();
+            SetRenderTargetsHook?.Disable();
             AtkServerDrawHook?.Disable();
             ApplySetTargetHook?.Disable();
         }
     }
 
-    private void AtkServerDrawDetour(void* self, bool a2)
+    private void AtkServerDrawDetour(AtkServer* self, bool a2)
     {
-        bool capture = config.Enable && lastRtContext != null;
+        bool capture = config.Enable;
         captureActive = capture;
 
         if (CollectDiagnostics) { rtmSnapshot = ""; queueSequenceCapture = ""; }
 
+        uiBindSeen = false;
         if (capture)
         {
             EnsureSentinels();
-            QueueSentinel(sentinelStart);
-            if (CollectDiagnostics) queueSequenceCapture += "Queue start > ";
+            var tls = ThreadLocals.ThreadLocalInstance();
+            atkDrawCtx = tls != null && tls->IsInitialized ? tls->GraphicsKernelContext : null;
+            inAtkServerDraw = atkDrawCtx != null;
         }
         AtkServerDrawHook!.Original(self, a2);
-        if (capture)
+        inAtkServerDraw = false;
+        if (capture && uiBindSeen)
         {
-            QueueSentinel(sentinelEnd);
-            if (CollectDiagnostics) queueSequenceCapture += " < Queue end";
+            uint endKey = (uiStartKey & KeyLayerMask) | KeyInLayerMax;
+            EnqueueBind(sentinelEnd, null, endKey);
+            if (CollectDiagnostics) queueSequenceCapture += $" < S1@{endKey:X8}";
         }
     }
 
-    // TODO replace with thread local context
-    private void QueueRenderTargetsDetour(void* context, int count, Texture** renderTargets, Texture* depthBuffer, short a5, short a6, short a7, short a8)
+    private void SetRenderTargetsDetour(Context* context, int count, Texture** renderTargets, Texture* depthBuffer, short a5, short a6, short a7, short a8)
     {
-        lastRtContext = context;
-        QueueRenderTargetsHook!.Original(context, count, renderTargets, depthBuffer, a5, a6, a7, a8);
+        queueHookFired = true;
+        bool uiThread = inAtkServerDraw && context == atkDrawCtx;
+        var realTarget = renderTargets[0];
+        bool expectedBind = uiThread
+            && count == 1
+            && depthBuffer == null
+            && renderTargets != null
+            && IsExpectedTarget(realTarget);
+
+        // BG only needs binding once; I think this might work on accident because no BG addons do sub renders.
+        if (expectedBind && !uiBindSeen)
+        {
+            uiBindSeen = true;
+            uiStartKey = context->Key;
+            EnqueueBind(sentinelStart, null, uiStartKey & KeyLayerMask);
+            if (CollectDiagnostics) queueSequenceCapture += $"S0@{uiStartKey & KeyLayerMask:X8} > ";
+
+            if (BgCapture.SizeEquals(realTarget))
+            {
+                var sceneDepth = Rtm->DepthStencil;
+                var sceneTarget = Rtm->SwapChainBackBuffer;
+                if (sceneDepth != null && sceneTarget != null)
+                {
+                    EnqueueBind(BgCapture.NativeTex, sceneDepth, BgWindowStartKey);
+                    EnqueueBind(sceneTarget, sceneDepth, BgWindowEndKey);
+                    if (CollectDiagnostics) queueSequenceCapture += "BG->native | ";
+                }
+            }
+        }
+
+        // Redirect multiple foreground binds because rendering can fork and render other textures mid-draw.
+        if (expectedBind && FgCapture.SizeEquals(realTarget))
+        {
+            renderTargets[0] = FgCapture.NativeTex;
+            if (CollectDiagnostics) queueSequenceCapture += "FG->native | ";
+        }
+
+        if (CollectDiagnostics && count >= 1 && renderTargets != null)
+        {
+            bool isRtm = IsExpectedTarget(realTarget);
+            if (uiThread || isRtm)
+            {
+                var kind = depthBuffer != null ? "BG" : "FG";
+                var tid = Environment.CurrentManagedThreadId % 1000;
+                var rt = renderTargets[0];
+                var name = isRtm ? RtmName(realTarget)
+                    : rt == FgCapture.NativeTex ? "FgTex"
+                    : rt == BgCapture.NativeTex ? "BgTex"
+                    : "Other";
+                queueSequenceCapture += $"{kind}:{name}@{context->Key:X8}#t{tid} | ";
+            }
+        }
+        SetRenderTargetsHook!.Original(context, count, renderTargets, depthBuffer, a5, a6, a7, a8);
+    }
+
+    private void EnqueueBind(Texture* renderTarget, Texture* depth, uint stampKey)
+    {
+        if (atkDrawCtx == null) return;
+        uint key = atkDrawCtx->Key;
+        atkDrawCtx->Key = stampKey;
+        SetRenderTargetsHook!.Original(atkDrawCtx, 1, &renderTarget, depth, 0, 0, 0, 0);
+        atkDrawCtx->Key = key;
     }
 
     public void Update()
@@ -237,7 +275,12 @@ internal unsafe class UICapture : IDisposable
             SetHooksEnabled(allowed);
             hooksEnabled = allowed;
             if (!allowed)
-                lastRtContext = null;
+            {
+                atkDrawCtx = null;
+                uiBindSeen = false;
+                queueHookFired = false;
+                inAtkServerDraw = false;
+            }
         }
 
         if (!allowed)
@@ -294,7 +337,7 @@ internal unsafe class UICapture : IDisposable
     public List<CaptureDiag> Diagnostics()
     {
         var steps = new List<CaptureDiag>();
-        steps.Add(HookStep("SetRenderTargets hook", QueueRenderTargetsHook));
+        steps.Add(HookStep("SetRenderTargets hook", SetRenderTargetsHook));
         steps.Add(HookStep("AtkServerDraw hook", AtkServerDrawHook));
         steps.Add(HookStep("ApplySetTargetCommand hook", ApplySetTargetHook));
         steps.Add(new("Killswitch on", config.Enable, config.Enable ? null : "click the indicator to re-enable"));
@@ -313,14 +356,14 @@ internal unsafe class UICapture : IDisposable
             steps.Add(new("Game-state check", false, e.GetType().Name));
         }
 
-        steps.Add(new("SetRenderTargets hook fired", lastRtContext != null, lastRtContext != null ? null : "never observed a UI render"));
+        steps.Add(new("SetRenderTargets hook fired", queueHookFired, queueHookFired ? null : "never observed a UI render"));
         steps.Add(new("Sentinels created", sentinelStart != null && sentinelEnd != null));
         steps.Add(new("apply sequence", true, applySequenceCapture));
+        steps.Add(new("queue sequence", true, queueSequenceCapture));
         steps.Add(new("RTM tex", true, rtmTex));
 
         queueSequenceCapture = "";
         applySequenceCapture = "";
-        fgBinds = bgBinds = 0;
 
         steps.Add(new("Foreground texture captured", !FgCapture.IsNull, FgCapture.IsNull ? "redirect never reached the UI pass" : null));
         steps.Add(new("Background texture captured", !BgCapture.IsNull, BgCapture.IsNull ? "no depth-tested (nameplate) draws yet" : null));
@@ -333,157 +376,73 @@ internal unsafe class UICapture : IDisposable
     {
         if (command->RenderTarget0 == sentinelStart)
         {
-            targetDetourArmed = true;
-            fgBinds = bgBinds = 0;
-            fgCleared = false;
-            bgCleared = false;
+            if (captureActive)
+            {
+                try
+                {
+                    var uiTarget = Rtm->SwapChainBackBuffer;
+                    if (uiTarget == null) return;
+                    FgCapture.Ensure(uiTarget);
+                    BgCapture.Ensure(uiTarget);
+
+                    uiRedirectTick = Environment.TickCount64;
+                }
+                catch (Exception e)
+                {
+                    Plugin.Log.Error(e, "[GBUI] early FG redirect failed");
+                }
+            }
             if (CollectDiagnostics)
             {
                 rtmTex = "";
-                byte* rtm = (byte*)FFXIVClientStructs.FFXIV.Client.Graphics.Render.RenderTargetManager.Instance();
-                foreach (var offset in RtmMatchOffsets)
-                {
-                    var tex = (Texture*)*(nint*)(rtm + offset);
-                    if (tex != null)
-                        rtmTex += $"0x{offset:X}: 0x{(nint)tex:X} 0x{(nint)tex->D3D11Texture2D:X} | ";
-                }
+                var bb = Rtm->SwapChainBackBuffer;
+                var tas = Rtm->ToneAdjustSource;
+                if (bb != null) rtmTex += $"BackBuffer: 0x{(nint)bb:X} 0x{(nint)bb->D3D11Texture2D:X} | ";
+                if (tas != null) rtmTex += $"ToneAdjustSrc: 0x{(nint)tas:X} 0x{(nint)tas->D3D11Texture2D:X} | ";
             }
             return;
         }
         if (command->RenderTarget0 == sentinelEnd)
         {
-            targetDetourArmed = false;
             if (!fgCleared) FgCapture.Clear();
             if (!bgCleared) BgCapture.Clear();
+            fgCleared = false;
+            bgCleared = false;
             return;
         }
 
         ApplySetTargetHook!.Original(self, command);
 
-        if (targetDetourArmed && captureActive && IsRtmBuffer(command->RenderTarget0))
+        if (FgCapture.NativeTex != null && command->RenderTarget0 == FgCapture.NativeTex)
         {
-            try
+            if (CollectDiagnostics) applySequenceCapture += $"FG:native | ";
+            if (!fgCleared)
             {
-                RedirectToCapture(command);
+                FgCapture.Clear();
+                fgCleared = true;
             }
-            catch (Exception e)
+            uiRedirectTick = Environment.TickCount64;
+            return;
+        }
+        if (BgCapture.NativeTex != null && command->RenderTarget0 == BgCapture.NativeTex)
+        {
+            if (CollectDiagnostics) applySequenceCapture += "BG:native | ";
+            if (!bgCleared)
             {
-                Plugin.Log.Error(e, "[GBUI] redirect failed");
+                BgCapture.Clear();
+                bgCleared = true;
             }
+            return;
         }
     }
+
+    private static Texture* CreateSentinel()
+        => Texture.CreateTexture2D(1, 1, 1, TextureFormat.B8G8R8A8_UNORM,
+            TextureFlags.TextureRenderTarget | TextureFlags.TextureType2D, 0);
 
     private void EnsureSentinels()
     {
-        if (sentinelStart == null)
-            sentinelStart = Texture.CreateTexture2D(1, 1, 1, TextureFormat.B8G8R8A8_UNORM,
-                TextureFlags.TextureRenderTarget | TextureFlags.TextureType2D, 0);
-        if (sentinelEnd == null)
-            sentinelEnd = Texture.CreateTexture2D(1, 1, 1, TextureFormat.B8G8R8A8_UNORM,
-                TextureFlags.TextureRenderTarget | TextureFlags.TextureType2D, 0);
+        if (sentinelStart == null) sentinelStart = CreateSentinel();
+        if (sentinelEnd == null) sentinelEnd = CreateSentinel();
     }
-
-    private void QueueSentinel(Texture* sentinel)
-    {
-        if (lastRtContext != null)
-        {
-            QueueRenderTargetsHook!.Original(lastRtContext, 1, &sentinel, null, 0, 0, 0, 0);
-        }
-    }
-
-    private bool IsRtmBuffer(Texture* rt) => RtmOffset(rt) >= 0;
-    private int RtmOffset(Texture* rt)
-    {
-        byte* rtm = (byte*)FFXIVClientStructs.FFXIV.Client.Graphics.Render.RenderTargetManager.Instance();
-        foreach (var offset in RtmMatchOffsets)
-        {
-            var tex = (Texture*)*(nint*)(rtm + offset);
-            if (rt == tex)
-            {
-                return offset;
-            }
-        }
-        return -1;
-    }
-
-    private void RedirectToCapture(RenderCommandSetTarget* command)
-    {
-        var rtvs = context.OutputMerger.GetRenderTargets(0, out var currentDsv);
-        try
-        {
-            bool isBackground = currentDsv != null;
-            if (isBackground) bgBinds++; else fgBinds++;
-            var target = isBackground ? BgCapture : FgCapture;
-
-            if (CollectDiagnostics)
-            {
-                var type = isBackground ? $"BG{bgBinds}" : $"FG{fgBinds}";
-                applySequenceCapture += $"{type}:0x{RtmOffset(command->RenderTarget0):X} | ";
-            }
-
-            // The UI pass binds FG once before BG; only the binds after BG are the real FG.
-            if (isBackground && bgBinds != 1) return;
-            if (!isBackground && bgBinds < 1) return;
-
-            EnsureCapture(target, command->RenderTarget0);
-
-            context.OutputMerger.SetTargets(currentDsv, target.Rtv);
-
-            if (!isBackground) uiRedirectTick = Environment.TickCount64;
-
-            ref bool cleared = ref isBackground ? ref bgCleared : ref fgCleared;
-            if (!cleared)
-            {
-                context.ClearRenderTargetView(target.Rtv, new RawColor4(0, 0, 0, 0));
-                cleared = true;
-             }
-        }
-        finally
-        {
-            if (rtvs != null)
-                foreach (var r in rtvs) r?.Dispose();
-            currentDsv?.Dispose();
-        }
-    }
-
-    private void EnsureCapture(CaptureTarget target, Texture* engineBb)
-    {
-        if (engineBb == null) return;
-        var res = (nint)engineBb->D3D11Texture2D;
-        if (res == nint.Zero) return;
-
-        if (target.Tex != null
-            && target.SrcWidth == engineBb->AllocatedWidth
-            && target.SrcHeight == engineBb->AllocatedHeight)
-        {
-            return;
-        }
-
-        Marshal.AddRef(res);
-        using var bbTex = new Texture2D(res);
-        var desc = bbTex.Description;
-
-        target.Dispose();
-
-        desc.BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource;
-        desc.CpuAccessFlags = CpuAccessFlags.None;
-        desc.OptionFlags = ResourceOptionFlags.None;
-        desc.Usage = ResourceUsage.Default;
-        desc.Format = ToUNorm(desc.Format);
-
-        target.Tex = new Texture2D(device, desc);
-        target.Rtv = new RenderTargetView(device, target.Tex);
-        target.Srv = new ShaderResourceView(device, target.Tex);
-        target.SrcWidth = engineBb->AllocatedWidth;
-        target.SrcHeight = engineBb->AllocatedHeight;
-        context.ClearRenderTargetView(target.Rtv, new RawColor4(0, 0, 0, 0));
-    }
-
-    private static Format ToUNorm(Format f) => f switch
-    {
-        Format.B8G8R8A8_Typeless => Format.B8G8R8A8_UNorm,
-        Format.R8G8B8A8_Typeless => Format.R8G8B8A8_UNorm,
-        Format.R10G10B10A2_Typeless => Format.R10G10B10A2_UNorm,
-        _ => f,
-    };
 }

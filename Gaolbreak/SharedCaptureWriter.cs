@@ -24,7 +24,7 @@ internal sealed class SharedCaptureWriter
         Write(Field.BgTexture, capture.BgCapture);
     }
 
-    private void Write(Field at, UICapture.CaptureTarget t)
+    private void Write(Field at, CaptureTarget t)
     {
         int i = (int)at;
         data[i + 0] = t.Tex?.NativePointer ?? 0;
