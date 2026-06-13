@@ -21,7 +21,8 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    private const string CommandName = "/gbui";
+    private const string CommandName = "/gaolbreak";
+    private const string ShortCommandName = "/gbui";
 
     private bool liftFgOverlay;
     // Last frame's CaptureActive - prevents one frame UI loss when capture is disabled.
@@ -66,10 +67,13 @@ public sealed class Plugin : IDalamudPlugin
         fgOverlay.OnWindowLmbDown += depthManager.OnWindowLmbDown;
         fgOverlay.OnAddonLmbDown += depthManager.OnAddonLmbDown;
         Framework.Update += Update;
-        CommandManager.AddHandler(CommandName, new CommandInfo((_, _) => OpenConfig())
+
+        var commandInfo = new CommandInfo((_, _) => OpenConfig())
         {
             HelpMessage = "Toggle the Config window.",
-        });
+        };
+        CommandManager.AddHandler(CommandName, commandInfo);
+        CommandManager.AddHandler(ShortCommandName, commandInfo);
     }
 
     public void Dispose()
@@ -87,6 +91,7 @@ public sealed class Plugin : IDalamudPlugin
         fgOverlay.OnAddonLmbDown -= depthManager.OnAddonLmbDown;
         Framework.Update -= Update;
         CommandManager.RemoveHandler(CommandName);
+        CommandManager.RemoveHandler(ShortCommandName);
 
         depthManager.RestoreAll();
         fgOverlay.Dispose();
