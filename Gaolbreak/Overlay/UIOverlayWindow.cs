@@ -13,7 +13,7 @@ internal unsafe class UIOverlayWindow : OverlayWindow
     private readonly Hook<GetAddonCollisionDelegate>? hook;
     private readonly WindowManager windowManager;
     private readonly Config config;
-    private AtkUnitBase* trueIntersecting;
+    private AtkUnitBase* hoverAddon;
     private enum PressOwner { None, Window, Game }
     private PressOwner pressOwner;
     private bool prevLmbDown;
@@ -50,7 +50,9 @@ internal unsafe class UIOverlayWindow : OverlayWindow
         ImGuiWindowPtr overlay = GetNativeWindow();
         bool windowHovered = !hovered.IsNull && hovered != overlay;
 
-        AtkUnitBase* intersecting = trueIntersecting;
+        var mouse = ImGui.GetMousePos();
+        hoverAddon = AddonCollisionResolver.GetAddonCollision((short)mouse.X, (short)mouse.Y);
+        AtkUnitBase* intersecting = hoverAddon;
         bool bgAddonHovered = IsBackgroundAddon(intersecting);
         if (bgAddonHovered && !windowHovered)
         {
@@ -116,13 +118,12 @@ internal unsafe class UIOverlayWindow : OverlayWindow
 
     public MouseDiag MouseDiagnostics()
     {
-        string hoverAddon = "—";
-        if (trueIntersecting != null) hoverAddon = trueIntersecting->NameString;
+        string hoverAddonName = hoverAddon != null ? hoverAddon->NameString : "—";
 
         ImGuiWindowPtr hovered = ImGui.GetCurrentContext().HoveredWindow;
         ImGuiWindowPtr overlay = GetNativeWindow();
         bool windowHovered = !hovered.IsNull && hovered != overlay;
-        bool onAddon = hoverAddon != "—";
+        bool onAddon = hoverAddonName != "—";
 
         string hoverWindow = windowHovered ? hovered.GetName() : "—";
         string hoverTop =
@@ -131,13 +132,12 @@ internal unsafe class UIOverlayWindow : OverlayWindow
             : onAddon ? "Game"
             : "—";
 
-        return new(hoverAddon, hoverWindow, hoverTop, lastClickAddon, lastClickWindow, lastClickTop);
+        return new(hoverAddonName, hoverWindow, hoverTop, lastClickAddon, lastClickWindow, lastClickTop);
     }
 
     private void GetAddonCollisionDetour(AtkUnitManager* self, AddonCollision* collisionInfo, short x, short y)
     {
         hook!.Original(self, collisionInfo, x, y);
-        trueIntersecting = collisionInfo->UnitBase;
         if (config.Enable && WindowOwnsCursor(x, y))
         {
             collisionInfo->UnitBase = null;
@@ -154,7 +154,7 @@ internal unsafe class UIOverlayWindow : OverlayWindow
             return false;
 
         var hovered = windowManager.WindowAt(new(x, y), overlay);
-        if (IsBackgroundAddon(trueIntersecting))
+        if (IsBackgroundAddon(AddonCollisionResolver.GetAddonCollision(x, y)))
             return !hovered.IsNull;
 
         return !hovered.IsNull && windowManager.IsInFront(hovered, overlay);
@@ -171,7 +171,7 @@ internal unsafe class UIOverlayWindow : OverlayWindow
         io.WantCaptureMouseUnlessPopupClose = false;
         ImGui.SetNextFrameWantCaptureMouse(false);
 
-        if (config.EnableReorder && lmbJustPressed && trueIntersecting != null)
+        if (config.EnableReorder && lmbJustPressed && hoverAddon != null)
         {
             BringToFront();
         }
