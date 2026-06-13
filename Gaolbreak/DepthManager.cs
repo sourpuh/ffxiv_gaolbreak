@@ -21,13 +21,19 @@ internal unsafe class DepthManager(Config config, IGameGui gameGui)
         "_ActionDoubleCrossL",
         "_ActionDoubleCrossR",
         "_BagWidget",
-        "_ToDoList",
         "_PartyList",
         "_EnemyList",
         "_DTR",
         "_ParameterWidget",
         "_MainCommand",
         "_Money",
+        "_LimitBreak",
+        "_FocusTargetInfo",
+        "_ContentGauge",
+        "_ToDoList",
+        "_CastBar",
+        "_Exp",
+        "_ActionContents", // TODO this one looks different in Gaolbreak like shadow is on top?
         "ScenarioTree",
     ];
 
@@ -42,7 +48,7 @@ internal unsafe class DepthManager(Config config, IGameGui gameGui)
     // Liftable addons currently lifted to the FG.
     public readonly HashSet<string> LiftableForeground = [];
     // Addons the game rewrites node flags as it shows/animates entries clearing the depth-priority flag set on PostShow.
-    public static readonly HashSet<string> ContinuousReapplyAddons = ["_FlyText"];
+    public static readonly HashSet<string> ContinuousReapplyAddons = ["_FlyText", "_PopUpText", "_ToDoList"];
     // Game already uses depth priority for these so don't touch their depth.
     private static readonly HashSet<string> NativeDepthOrderAddons = ["NamePlate"];
     // Pop-up Addons whose show events should be ignored.
