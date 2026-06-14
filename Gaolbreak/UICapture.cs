@@ -45,6 +45,7 @@ internal unsafe class UICapture : IDisposable
 
     private Texture* sentinelStart = null;
     private Texture* sentinelEnd = null;
+    private Texture* fullResDepthPtr = null;
     private Context* atkDrawCtx = null;
     private uint uiStartKey;
     private bool uiBindSeen;
@@ -69,7 +70,6 @@ internal unsafe class UICapture : IDisposable
     public string rtmSnapshot = "";
     public string applySequenceCapture = "";
     public string queueSequenceCapture = "";
-    public string rtmTex = "";
 
     private long uiRedirectTick;
     private const long StaleMs = 1000;
@@ -220,7 +220,7 @@ internal unsafe class UICapture : IDisposable
 
             if (BgCapture.SizeEquals(realTarget))
             {
-                var sceneDepth = Rtm->DepthStencil;
+                var sceneDepth = fullResDepthPtr != null ? fullResDepthPtr : Rtm->DepthStencil;
                 var sceneTarget = Rtm->SwapChainBackBuffer;
                 if (sceneDepth != null && sceneTarget != null)
                 {
@@ -360,7 +360,6 @@ internal unsafe class UICapture : IDisposable
         steps.Add(new("Sentinels created", sentinelStart != null && sentinelEnd != null));
         steps.Add(new("apply sequence", true, applySequenceCapture));
         steps.Add(new("queue sequence", true, queueSequenceCapture));
-        steps.Add(new("RTM tex", true, rtmTex));
 
         queueSequenceCapture = "";
         applySequenceCapture = "";
@@ -392,14 +391,6 @@ internal unsafe class UICapture : IDisposable
                     Plugin.Log.Error(e, "[GBUI] early FG redirect failed");
                 }
             }
-            if (CollectDiagnostics)
-            {
-                rtmTex = "";
-                var bb = Rtm->SwapChainBackBuffer;
-                var tas = Rtm->ToneAdjustSource;
-                if (bb != null) rtmTex += $"BackBuffer: 0x{(nint)bb:X} 0x{(nint)bb->D3D11Texture2D:X} | ";
-                if (tas != null) rtmTex += $"ToneAdjustSrc: 0x{(nint)tas:X} 0x{(nint)tas->D3D11Texture2D:X} | ";
-            }
             return;
         }
         if (command->RenderTarget0 == sentinelEnd)
@@ -410,6 +401,13 @@ internal unsafe class UICapture : IDisposable
             bgCleared = false;
             return;
         }
+
+        var bb = Rtm->SwapChainBackBuffer;
+        var d = command->DepthBuffer;
+        if (d != null
+            && d->ActualWidth == bb->ActualWidth && d->ActualHeight == bb->ActualHeight
+            && d->AllocatedWidth == d->ActualWidth && d->AllocatedHeight == d->ActualHeight)
+            fullResDepthPtr = d;
 
         ApplySetTargetHook!.Original(self, command);
 
