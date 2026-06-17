@@ -138,7 +138,7 @@ internal unsafe class UIOverlayWindow : OverlayWindow
     private void GetAddonCollisionDetour(AtkUnitManager* self, AddonCollision* collisionInfo, short x, short y)
     {
         hook!.Original(self, collisionInfo, x, y);
-        if (config.Enable && WindowOwnsCursor(x, y))
+        if (config.Enable && WindowOwnsCursor(x, y) && !UIModule.Instance()->IsPadModeEnabled())
         {
             collisionInfo->UnitBase = null;
             collisionInfo->CollisionNode = null;
