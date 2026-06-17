@@ -49,7 +49,7 @@ internal sealed class ConfigWindow : Window
         if (ImGui.Checkbox("Indicator", ref indicator))
             config.EnableIndicator = indicator;
 
-        if (!ImGui.BeginTabBar("##gbui_tabs")) return;
+        if (!ImGui.BeginTabBar("##gaolbreak_tabs")) return;
 
         if (ImGui.BeginTabItem("Windows"))
         {

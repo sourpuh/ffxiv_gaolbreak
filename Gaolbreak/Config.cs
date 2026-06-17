@@ -19,7 +19,7 @@ internal sealed class Config
         }
         catch (Exception e)
         {
-            Plugin.Log.Warning(e, "[GBUI] failed to load config; starting fresh");
+            Plugin.Log.Warning(e, "Failed to load config");
         }
         data = loaded ?? new Data();
     }

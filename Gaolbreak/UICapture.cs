@@ -107,7 +107,7 @@ internal unsafe class UICapture : IDisposable
         }
         catch (Exception e)
         {
-            Plugin.Log.Error(e, "[GBUI] failed to install hooks");
+            Plugin.Log.Error(e, "Failed to install hooks");
         }
     }
 
@@ -388,7 +388,7 @@ internal unsafe class UICapture : IDisposable
                 }
                 catch (Exception e)
                 {
-                    Plugin.Log.Error(e, "[GBUI] early FG redirect failed");
+                    Plugin.Log.Error(e, "FG redirect failed");
                 }
             }
             return;

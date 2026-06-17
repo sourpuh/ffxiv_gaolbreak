@@ -32,7 +32,7 @@ internal class IndicatorWindow : OverlayWindow
         var boxSize = new Vector2(dotRadius) + pad * 2;
 
         var p = ImGui.GetCursorScreenPos();
-        ImGui.InvisibleButton("##gbui_kill", boxSize);
+        ImGui.InvisibleButton("##gaolbreak_killswitch", boxSize);
         bool leftClicked = ImGui.IsItemClicked();
         bool rightClicked = ImGui.IsItemClicked(ImGuiMouseButton.Right);
         if (ImGui.IsItemHovered())
