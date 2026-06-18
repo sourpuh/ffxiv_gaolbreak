@@ -16,6 +16,7 @@ internal sealed unsafe class CaptureTarget(Device device, DeviceContext context)
     public Texture2D? Tex;
     public RenderTargetView? Rtv;
     public ShaderResourceView? Srv;
+    private bool hasCleared;
 
     public nint Handle => Srv?.NativePointer ?? nint.Zero;
     public uint Width => (uint)(Tex?.Description.Width ?? 0);
@@ -26,12 +27,16 @@ internal sealed unsafe class CaptureTarget(Device device, DeviceContext context)
 
     public void Clear()
     {
-        if (Rtv != null)
+        if (!hasCleared)
+        {
             context.ClearRenderTargetView(Rtv, new RawColor4(0, 0, 0, 0));
+            hasCleared = true;
+        }
     }
 
-    public bool Ensure(Texture* sizeRef)
+    public bool BeginFrame(Texture* sizeRef)
     {
+        hasCleared = false;
         if (sizeRef == null || sizeRef->D3D11Texture2D == null) return false;
         if (SizeEquals(NativeTex, sizeRef)) return true;
 

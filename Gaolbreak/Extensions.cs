@@ -1,6 +1,5 @@
 using Dalamud.Bindings.ImGui;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -33,14 +32,25 @@ internal static class Extensions
 
     extension(ref Context c)
     {
-        public unsafe uint Key {
-            get => *(uint*)((byte*)Unsafe.AsPointer(ref c) + 8);
-            set => *(uint*)((byte*)Unsafe.AsPointer(ref c) + 8) = value;
+        public unsafe byte SubViewLayer {
+            get => *((byte*)Unsafe.AsPointer(ref c) + 11);
+            set => *((byte*)Unsafe.AsPointer(ref c) + 11) = value;
         }
     }
 
     extension(RenderCommandSetTarget command)
     {
         public unsafe Texture* RenderTarget0 => command.RenderTargets[0].Value;
+    }
+
+    extension(ref Texture t)
+    {
+        public bool IsFullSize
+            => t.AllocatedWidth == t.ActualWidth
+            && t.AllocatedHeight == t.ActualHeight;
+
+        public unsafe bool AllocatedSizeEquals(Texture* t2)
+            => t.AllocatedWidth == t2->AllocatedWidth
+            && t.AllocatedHeight == t2->AllocatedHeight;
     }
 }

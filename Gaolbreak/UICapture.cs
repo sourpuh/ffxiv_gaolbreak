@@ -13,14 +13,17 @@ using ImmediateContext = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Immedia
 using RenderCommandSetTarget = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.RenderCommandSetTarget;
 using RenderTargetManager = FFXIVClientStructs.FFXIV.Client.Graphics.Render.RenderTargetManager;
 using Texture = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Texture;
-using TextureFlags = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.TextureFlags;
-using TextureFormat = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.TextureFormat;
 using ThreadLocals = FFXIVClientStructs.Interop.ThreadLocals;
 
 namespace Gaolbreak;
 
 internal unsafe class UICapture : IDisposable
 {
+    private const byte BgBandStart = 0xCE;
+    private const byte BgBandEnd = 0xCF;
+    private const byte FgBandStart = 0xE0;
+    private const byte FgBandEnd = 0xEF;
+
     private delegate void AtkServerDrawDelegate(AtkServer* self, bool a2);
     private readonly Hook<AtkServerDrawDelegate>? AtkServerDrawHook;
 
@@ -43,31 +46,16 @@ internal unsafe class UICapture : IDisposable
     public readonly CaptureTarget FgCapture;
     public readonly CaptureTarget BgCapture;
 
-    private Texture* sentinelStart = null;
-    private Texture* sentinelEnd = null;
-    private Texture* fullResDepthPtr = null;
-    private Context* atkDrawCtx = null;
-    private uint uiStartKey;
+    private Texture* sceneDepth = null;
+    private Context* currentCtx = null;
     private bool uiBindSeen;
-    private bool queueHookFired;
     private bool inAtkServerDraw;
-    private bool fgCleared;
-    private bool bgCleared;
     private bool captureActive;
     private bool hooksEnabled;
     private string? blockedReason;
 
-    // Sort key layout (Context+8): layer<<28 | sublayer<<24 | seq24.
-    private const uint KeyLayerMask = 0xF0000000;
-    private const uint KeyInLayerMax = 0x0FFFFFFF;
-    private const uint KeySeqMax = 0x00FFFFFF;
-
-    private const uint BgWindowStartKey = 0xCE000000;
-    private const uint BgWindowEndKey = BgWindowStartKey | KeySeqMax;
-
     // Diagnostics
     public bool CollectDiagnostics;
-    public string rtmSnapshot = "";
     public string applySequenceCapture = "";
     public string queueSequenceCapture = "";
 
@@ -121,8 +109,6 @@ internal unsafe class UICapture : IDisposable
         BgCapture.Dispose();
         premultBlend.Dispose();
         straightBlend.Dispose();
-        if (sentinelStart != null) { sentinelStart->DecRef(); sentinelStart = null; }
-        if (sentinelEnd != null) { sentinelEnd->DecRef(); sentinelEnd = null; }
     }
 
     private BlendState CreateBlend(BlendOption srcColorBlend)
@@ -179,90 +165,96 @@ internal unsafe class UICapture : IDisposable
         bool capture = config.Enable;
         captureActive = capture;
 
-        if (CollectDiagnostics) { rtmSnapshot = ""; queueSequenceCapture = ""; }
+        if (CollectDiagnostics) queueSequenceCapture = "";
 
         uiBindSeen = false;
         if (capture)
         {
-            EnsureSentinels();
+            var uiTarget = Rtm->SwapChainBackBuffer;
+            FgCapture.BeginFrame(uiTarget);
+            BgCapture.BeginFrame(uiTarget);
             var tls = ThreadLocals.ThreadLocalInstance();
-            atkDrawCtx = tls != null && tls->IsInitialized ? tls->GraphicsKernelContext : null;
-            inAtkServerDraw = atkDrawCtx != null;
+            currentCtx = tls != null && tls->IsInitialized ? tls->GraphicsKernelContext : null;
+            inAtkServerDraw = currentCtx != null;
         }
         AtkServerDrawHook!.Original(self, a2);
         inAtkServerDraw = false;
-        if (capture && uiBindSeen)
-        {
-            uint endKey = (uiStartKey & KeyLayerMask) | KeyInLayerMax;
-            EnqueueBind(sentinelEnd, null, endKey);
-            if (CollectDiagnostics) queueSequenceCapture += $" < S1@{endKey:X8}";
-        }
+        sceneDepth = null;
     }
 
     private void SetRenderTargetsDetour(Context* context, int count, Texture** renderTargets, Texture* depthBuffer, short a5, short a6, short a7, short a8)
     {
-        queueHookFired = true;
-        bool uiThread = inAtkServerDraw && context == atkDrawCtx;
+        if (context != currentCtx)
+        {
+            SetRenderTargetsHook!.Original(context, count, renderTargets, depthBuffer, a5, a6, a7, a8);
+            return;
+        }
+
+        // Capture full size scene depth; necessary for scaled resolution because RTM DepthStencil is scaled.
+        var bb = Rtm->SwapChainBackBuffer;
+        if (bb != null && depthBuffer != null && bb->AllocatedSizeEquals(depthBuffer) && depthBuffer->IsFullSize)
+        {
+            sceneDepth = depthBuffer;
+        }
+
         var realTarget = renderTargets[0];
-        bool expectedBind = uiThread
+        bool isCapturableBind = inAtkServerDraw
             && count == 1
             && depthBuffer == null
             && renderTargets != null
-            && IsExpectedTarget(realTarget);
+            && IsExpectedTarget(realTarget)
+            && FgCapture.SizeEquals(realTarget);
 
-        // BG only needs binding once; I think this might work on accident because no BG addons do sub renders.
-        if (expectedBind && !uiBindSeen)
+        if (isCapturableBind)
         {
-            uiBindSeen = true;
-            uiStartKey = context->Key;
-            EnqueueBind(sentinelStart, null, uiStartKey & KeyLayerMask);
-            if (CollectDiagnostics) queueSequenceCapture += $"S0@{uiStartKey & KeyLayerMask:X8} > ";
-
-            if (BgCapture.SizeEquals(realTarget))
+            if (!uiBindSeen)
             {
-                var sceneDepth = fullResDepthPtr != null ? fullResDepthPtr : Rtm->DepthStencil;
-                var sceneTarget = Rtm->SwapChainBackBuffer;
-                if (sceneDepth != null && sceneTarget != null)
+                uiBindSeen = true;
+                var sceneDepth = this.sceneDepth != null ? this.sceneDepth : Rtm->DepthStencil;
+                if (CollectDiagnostics)
                 {
-                    EnqueueBind(BgCapture.NativeTex, sceneDepth, BgWindowStartKey);
-                    EnqueueBind(sceneTarget, sceneDepth, BgWindowEndKey);
-                    if (CollectDiagnostics) queueSequenceCapture += "BG->native | ";
+                    float rtmDepthScale = MathF.Round(100f * Rtm->DepthStencil->ActualWidth / bb->ActualWidth);
+                    float depthScale = MathF.Round(100f * sceneDepth->ActualWidth / bb->ActualWidth);
+                    queueSequenceCapture += $"depth({rtmDepthScale}%->{depthScale}%):{(this.sceneDepth == null ? "depthstencil" : "capture")} | ";
                 }
-            }
-        }
+                var sceneTarget = Rtm->SwapChainBackBuffer;
 
-        // Redirect multiple foreground binds because rendering can fork and render other textures mid-draw.
-        if (expectedBind && FgCapture.SizeEquals(realTarget))
-        {
-            renderTargets[0] = FgCapture.NativeTex;
-            if (CollectDiagnostics) queueSequenceCapture += "FG->native | ";
+                EnqueueBind(BgCapture.NativeTex, sceneDepth, BgBandStart);
+                EnqueueBind(sceneTarget, sceneDepth, BgBandEnd);
+                if (CollectDiagnostics) queueSequenceCapture += $"BG[{BgBandStart:X2}-{BgBandEnd:X2}] | ";
+
+                EnqueueBind(FgCapture.NativeTex, null, FgBandStart);
+                EnqueueBind(sceneTarget, null, FgBandEnd);
+                if (CollectDiagnostics) queueSequenceCapture += $"FG[{FgBandStart:X2}-{FgBandEnd:X2}] | ";
+            }
+
+            bool bg = context->SubViewLayer == BgBandStart;
+            renderTargets[0] = bg ? BgCapture.NativeTex : FgCapture.NativeTex;
         }
 
         if (CollectDiagnostics && count >= 1 && renderTargets != null)
         {
-            bool isRtm = IsExpectedTarget(realTarget);
-            if (uiThread || isRtm)
+            if (inAtkServerDraw)
             {
                 var kind = depthBuffer != null ? "BG" : "FG";
-                var tid = Environment.CurrentManagedThreadId % 1000;
                 var rt = renderTargets[0];
-                var name = isRtm ? RtmName(realTarget)
-                    : rt == FgCapture.NativeTex ? "FgTex"
+                var realName = RtmName(realTarget);
+                var redirectName = rt == FgCapture.NativeTex ? "FgTex"
                     : rt == BgCapture.NativeTex ? "BgTex"
-                    : "Other";
-                queueSequenceCapture += $"{kind}:{name}@{context->Key:X8}#t{tid} | ";
+                    : "N/A";
+                queueSequenceCapture += $"{kind}[{realName}->{redirectName}]@{context->SubViewLayer:X2} | ";
             }
         }
         SetRenderTargetsHook!.Original(context, count, renderTargets, depthBuffer, a5, a6, a7, a8);
     }
 
-    private void EnqueueBind(Texture* renderTarget, Texture* depth, uint stampKey)
+    private void EnqueueBind(Texture* renderTarget, Texture* depth, byte band)
     {
-        if (atkDrawCtx == null) return;
-        uint key = atkDrawCtx->Key;
-        atkDrawCtx->Key = stampKey;
-        SetRenderTargetsHook!.Original(atkDrawCtx, 1, &renderTarget, depth, 0, 0, 0, 0);
-        atkDrawCtx->Key = key;
+        if (currentCtx == null) return;
+        byte saved = currentCtx->SubViewLayer;
+        currentCtx->SubViewLayer = band;
+        SetRenderTargetsHook!.Original(currentCtx, 1, &renderTarget, depth, 0, 0, 0, 0);
+        currentCtx->SubViewLayer = saved;
     }
 
     public void Update()
@@ -276,9 +268,8 @@ internal unsafe class UICapture : IDisposable
             hooksEnabled = allowed;
             if (!allowed)
             {
-                atkDrawCtx = null;
+                currentCtx = null;
                 uiBindSeen = false;
-                queueHookFired = false;
                 inAtkServerDraw = false;
             }
         }
@@ -340,7 +331,7 @@ internal unsafe class UICapture : IDisposable
         steps.Add(HookStep("SetRenderTargets hook", SetRenderTargetsHook));
         steps.Add(HookStep("AtkServerDraw hook", AtkServerDrawHook));
         steps.Add(HookStep("ApplySetTargetCommand hook", ApplySetTargetHook));
-        steps.Add(new("Killswitch on", config.Enable, config.Enable ? null : "click the indicator to re-enable"));
+        steps.Add(new("Enabled", config.Enable, config.Enable ? null : "click the indicator to re-enable"));
 
         try
         {
@@ -356,91 +347,33 @@ internal unsafe class UICapture : IDisposable
             steps.Add(new("Game-state check", false, e.GetType().Name));
         }
 
-        steps.Add(new("SetRenderTargets hook fired", queueHookFired, queueHookFired ? null : "never observed a UI render"));
-        steps.Add(new("Sentinels created", sentinelStart != null && sentinelEnd != null));
+        steps.Add(new("UI fresh (redirecting now)", UiFresh, UiFresh ? null : $"last redirect > {StaleMs}ms ago"));
+
         steps.Add(new("apply sequence", true, applySequenceCapture));
         steps.Add(new("queue sequence", true, queueSequenceCapture));
-
         queueSequenceCapture = "";
         applySequenceCapture = "";
-
-        steps.Add(new("Foreground texture captured", !FgCapture.IsNull, FgCapture.IsNull ? "redirect never reached the UI pass" : null));
-        steps.Add(new("Background texture captured", !BgCapture.IsNull, BgCapture.IsNull ? "no depth-tested (nameplate) draws yet" : null));
-        steps.Add(new("UI fresh (redirecting now)", UiFresh, UiFresh ? null : $"last redirect > {StaleMs}ms ago"));
 
         return steps;
     }
 
+    // TODO queue native clear commands instead of detouring this?
     private void ApplySetTargetCommandDetour(ImmediateContext* self, RenderCommandSetTarget* command)
     {
-        if (command->RenderTarget0 == sentinelStart)
-        {
-            if (captureActive)
-            {
-                try
-                {
-                    var uiTarget = Rtm->SwapChainBackBuffer;
-                    if (uiTarget == null) return;
-                    FgCapture.Ensure(uiTarget);
-                    BgCapture.Ensure(uiTarget);
-
-                    uiRedirectTick = Environment.TickCount64;
-                }
-                catch (Exception e)
-                {
-                    Plugin.Log.Error(e, "FG redirect failed");
-                }
-            }
-            return;
-        }
-        if (command->RenderTarget0 == sentinelEnd)
-        {
-            if (!fgCleared) FgCapture.Clear();
-            if (!bgCleared) BgCapture.Clear();
-            fgCleared = false;
-            bgCleared = false;
-            return;
-        }
-
-        var bb = Rtm->SwapChainBackBuffer;
-        var d = command->DepthBuffer;
-        if (d != null
-            && d->ActualWidth == bb->ActualWidth && d->ActualHeight == bb->ActualHeight
-            && d->AllocatedWidth == d->ActualWidth && d->AllocatedHeight == d->ActualHeight)
-            fullResDepthPtr = d;
-
         ApplySetTargetHook!.Original(self, command);
 
-        if (FgCapture.NativeTex != null && command->RenderTarget0 == FgCapture.NativeTex)
+        if (command->RenderTarget0 == FgCapture.NativeTex)
         {
-            if (CollectDiagnostics) applySequenceCapture += $"FG:native | ";
-            if (!fgCleared)
-            {
-                FgCapture.Clear();
-                fgCleared = true;
-            }
+            if (CollectDiagnostics) applySequenceCapture += "FG | ";
+            FgCapture.Clear();
             uiRedirectTick = Environment.TickCount64;
             return;
         }
-        if (BgCapture.NativeTex != null && command->RenderTarget0 == BgCapture.NativeTex)
+        if (command->RenderTarget0 == BgCapture.NativeTex)
         {
-            if (CollectDiagnostics) applySequenceCapture += "BG:native | ";
-            if (!bgCleared)
-            {
-                BgCapture.Clear();
-                bgCleared = true;
-            }
+            if (CollectDiagnostics) applySequenceCapture += "BG | ";
+            BgCapture.Clear();
             return;
         }
-    }
-
-    private static Texture* CreateSentinel()
-        => Texture.CreateTexture2D(1, 1, 1, TextureFormat.B8G8R8A8_UNORM,
-            TextureFlags.TextureRenderTarget | TextureFlags.TextureType2D, 0);
-
-    private void EnsureSentinels()
-    {
-        if (sentinelStart == null) sentinelStart = CreateSentinel();
-        if (sentinelEnd == null) sentinelEnd = CreateSentinel();
     }
 }
