@@ -287,6 +287,7 @@ internal unsafe class UICapture : IDisposable
             if (IsZoning()) return "Zoning";
             if (Plugin.GameGui.GameUiHidden) return "UI hidden";
             if (IsInCutscene()) return "Cutscene";
+            if (IsInCharacterCreator()) return "Character Creator";
             if (IsFaded()) return "Faded";
             return null;
         }
@@ -309,6 +310,9 @@ internal unsafe class UICapture : IDisposable
 
     private static bool IsInCutscene()
         => Plugin.Condition[ConditionFlag.WatchingCutscene] || Plugin.Condition[ConditionFlag.OccupiedInCutSceneEvent] || Plugin.Condition[ConditionFlag.WatchingCutscene78];
+
+    private static bool IsInCharacterCreator()
+        => Plugin.Condition[ConditionFlag.CreatingCharacter];
 
     private static bool IsFaded()
     {
@@ -340,6 +344,7 @@ internal unsafe class UICapture : IDisposable
             steps.Add(new("Not zoning", !IsZoning()));
             steps.Add(new("Game UI not hidden", !Plugin.GameGui.GameUiHidden));
             steps.Add(new("Not in a cutscene", !IsInCutscene()));
+            steps.Add(new("Not in a character creator", !IsInCharacterCreator()));
             steps.Add(new("Not faded to black", !IsFaded()));
         }
         catch (Exception e)
