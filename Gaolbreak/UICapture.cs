@@ -3,8 +3,7 @@ using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using Dalamud.Interface.Utility;
 using Dalamud.Utility.Signatures;
-using SharpDX.Direct3D11;
-using SharpDX.Mathematics.Interop;
+using TerraFX.Interop.DirectX;
 using AtkServer = FFXIVClientStructs.FFXIV.Component.GUI.AtkServer;
 using AtkUnitBase = FFXIVClientStructs.FFXIV.Component.GUI.AtkUnitBase;
 using Context = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Context;
@@ -35,11 +34,11 @@ internal unsafe class UICapture : IDisposable
     private readonly Hook<ApplySetTargetCommandDelegate>? ApplySetTargetHook = null;
 
     private readonly Config config;
-    private readonly SharpDX.Direct3D11.Device device;
-    private readonly DeviceContext context;
+    private readonly ID3D11Device* device;
+    private readonly ID3D11DeviceContext* context;
 
-    private readonly BlendState premultBlend;
-    private readonly BlendState straightBlend;
+    private readonly ID3D11BlendState* premultBlend;
+    private readonly ID3D11BlendState* straightBlend;
     private readonly ImDrawCallback premultBlendCallback;
     private readonly ImDrawCallback straightBlendCallback;
 
@@ -76,15 +75,17 @@ internal unsafe class UICapture : IDisposable
     public UICapture(Config config)
     {
         this.config = config;
-        device = new SharpDX.Direct3D11.Device((nint)Device.Instance()->D3D11Forwarder);
-        context = device.ImmediateContext;
+        device = (ID3D11Device*)Device.Instance()->D3D11Forwarder;
+        ID3D11DeviceContext* context;
+        device->GetImmediateContext(&context);
+        this.context = context;
         FgCapture = new(device, context);
         BgCapture = new(device, context);
 
-        premultBlend = CreateBlend(BlendOption.One);
-        straightBlend = CreateBlend(BlendOption.SourceAlpha);
-        premultBlendCallback = (list, cmd) => { try { context.OutputMerger.SetBlendState(premultBlend, new RawColor4(0, 0, 0, 0), -1); } catch { } };
-        straightBlendCallback = (list, cmd) => { try { context.OutputMerger.SetBlendState(straightBlend, new RawColor4(0, 0, 0, 0), -1); } catch { } };
+        premultBlend = CreateBlend(D3D11_BLEND.D3D11_BLEND_ONE);
+        straightBlend = CreateBlend(D3D11_BLEND.D3D11_BLEND_SRC_ALPHA);
+        premultBlendCallback = (list, cmd) => { try { SetBlend(premultBlend); } catch { } };
+        straightBlendCallback = (list, cmd) => { try { SetBlend(straightBlend); } catch { } };
         try
         {
             AtkServerDrawHook = Plugin.Hooker.HookFromAddress<AtkServerDrawDelegate>(
@@ -107,25 +108,34 @@ internal unsafe class UICapture : IDisposable
 
         FgCapture.Dispose();
         BgCapture.Dispose();
-        premultBlend.Dispose();
-        straightBlend.Dispose();
+        if (premultBlend != null) premultBlend->Release();
+        if (straightBlend != null) straightBlend->Release();
+        if (context != null) context->Release();
     }
 
-    private BlendState CreateBlend(BlendOption srcColorBlend)
+    private void SetBlend(ID3D11BlendState* blend)
     {
-        var desc = BlendStateDescription.Default();
-        desc.RenderTarget[0] = new RenderTargetBlendDescription
+        float* factor = stackalloc float[] { 0f, 0f, 0f, 0f };
+        context->OMSetBlendState(blend, factor, 0xFFFFFFFF);
+    }
+
+    private ID3D11BlendState* CreateBlend(D3D11_BLEND srcColorBlend)
+    {
+        var desc = new D3D11_BLEND_DESC();
+        desc.RenderTarget[0] = new D3D11_RENDER_TARGET_BLEND_DESC
         {
-            IsBlendEnabled = true,
-            SourceBlend = srcColorBlend,
-            DestinationBlend = BlendOption.InverseSourceAlpha,
-            BlendOperation = BlendOperation.Add,
-            SourceAlphaBlend = BlendOption.One,
-            DestinationAlphaBlend = BlendOption.InverseSourceAlpha,
-            AlphaBlendOperation = BlendOperation.Add,
-            RenderTargetWriteMask = ColorWriteMaskFlags.All,
+            BlendEnable = true,
+            SrcBlend = srcColorBlend,
+            DestBlend = D3D11_BLEND.D3D11_BLEND_INV_SRC_ALPHA,
+            BlendOp = D3D11_BLEND_OP.D3D11_BLEND_OP_ADD,
+            SrcBlendAlpha = D3D11_BLEND.D3D11_BLEND_ONE,
+            DestBlendAlpha = D3D11_BLEND.D3D11_BLEND_INV_SRC_ALPHA,
+            BlendOpAlpha = D3D11_BLEND_OP.D3D11_BLEND_OP_ADD,
+            RenderTargetWriteMask = (byte)D3D11_COLOR_WRITE_ENABLE.D3D11_COLOR_WRITE_ENABLE_ALL,
         };
-        return new BlendState(device, desc);
+        ID3D11BlendState* blend;
+        device->CreateBlendState(&desc, &blend);
+        return blend;
     }
 
     public void DrawFgTexture(ImDrawListPtr drawlist)
@@ -168,14 +178,20 @@ internal unsafe class UICapture : IDisposable
         if (CollectDiagnostics) queueSequenceCapture = "";
 
         uiBindSeen = false;
+        currentCtx = null;
+        inAtkServerDraw = false;
         if (capture)
         {
             var uiTarget = Rtm->SwapChainBackBuffer;
-            FgCapture.BeginFrame(uiTarget);
-            BgCapture.BeginFrame(uiTarget);
-            var tls = ThreadLocals.ThreadLocalInstance();
-            currentCtx = tls != null && tls->IsInitialized ? tls->GraphicsKernelContext : null;
-            inAtkServerDraw = currentCtx != null;
+            var ready = true;
+            ready &= FgCapture.BeginFrame(uiTarget);
+            ready &= BgCapture.BeginFrame(uiTarget);
+            if (ready)
+            {
+                var tls = ThreadLocals.ThreadLocalInstance();
+                currentCtx = tls != null && tls->IsInitialized ? tls->GraphicsKernelContext : null;
+                inAtkServerDraw = currentCtx != null;
+            }
         }
         AtkServerDrawHook!.Original(self, a2);
         inAtkServerDraw = false;
