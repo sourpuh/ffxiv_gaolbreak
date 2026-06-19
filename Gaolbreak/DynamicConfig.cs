@@ -16,7 +16,7 @@ internal sealed class DynamicConfigData
 internal sealed class DynamicConfig : IDisposable
 {
     private const string ConfigName = "config_v1.yaml";
-    private const string Url = $"https://raw.githubusercontent.com/sourpuh/ffxiv_gaolbreak/main/Gaolbreak/{ConfigName}";
+    private const string Url = $"https://raw.githubusercontent.com/sourpuh/ffxiv_gaolbreak/main/Content/{ConfigName}";
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
 
@@ -36,8 +36,7 @@ internal sealed class DynamicConfig : IDisposable
     public DynamicConfig(IDalamudPluginInterface plugin)
     {
         current = Parse(ReadEmbeddedDefault(plugin));
-        // Disable GitHub loading until pin rework.
-        //_ = LoadAsync();
+        _ = LoadAsync();
     }
 
     private async Task LoadAsync()
