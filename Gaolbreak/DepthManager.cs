@@ -23,7 +23,17 @@ internal unsafe class DepthManager(Config config, IGameGui gameGui, ICondition c
     // Game already uses depth priority for these so don't touch their depth.
     private static readonly HashSet<string> NativeDepthOrderAddons = ["NamePlate"];
     // Pop-up Addons whose show events should be ignored.
-    private static readonly HashSet<string> ShowIgnoreAddons = ["Tooltip", "ActionDetail", "ItemDetail"];
+    private static readonly HashSet<string> ShowIgnoreAddons = 
+        [
+            "Tooltip",
+            "ActionDetail",
+            "ItemDetail",
+            "LovmActionDetail",
+            "MiragePrismPrismItemDetail",
+            "XBMItemDetail",
+            "XBMPetActionDetail",
+            "XBMBattleMonsterDetail",
+        ];
 
     private readonly HashSet<string> PendingReapply = [];
     private bool FullApplyPending = true;
@@ -131,7 +141,7 @@ internal unsafe class DepthManager(Config config, IGameGui gameGui, ICondition c
         PendingReapply.Clear();
         LiftableForeground.Clear();
 
-        var manager = (AtkUnitManager*)RaptureAtkUnitManager.Instance();
+        var manager = RaptureAtkUnitManager.Instance();
         if (manager == null) return;
 
         var list = &manager->AllLoadedUnitsList;
