@@ -18,7 +18,7 @@ internal static class Extensions
     {
         public unsafe string GetName()
         {
-            return Encoding.UTF8.GetString(imGuiWindowPtr.Name, imGuiWindowPtr.NameBufLen);
+            return Encoding.UTF8.GetString(imGuiWindowPtr.Name, imGuiWindowPtr.NameBufLen - 1);
         }
     }
 

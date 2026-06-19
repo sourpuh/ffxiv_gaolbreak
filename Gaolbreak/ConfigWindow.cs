@@ -38,7 +38,7 @@ internal sealed class ConfigWindow : Window
     {
         var self = ImGui.GetCurrentContext().CurrentWindow;
         bool enable = config.Enable;
-        if (ImGui.Checkbox("Draw Overlay", ref enable))
+        if (ImGui.Checkbox("Enable", ref enable))
             config.Enable = enable;
         ImGui.SameLine();
         bool reorder = config.EnableReorder;
@@ -177,39 +177,30 @@ internal sealed class ConfigWindow : Window
             ImGuiTableFlags.Resizable |
             ImGuiTableFlags.SizingStretchSame;
 
-        if (!ImGui.BeginTable("##windows_list", 7, flags)) return;
+        if (!ImGui.BeginTable("##windows_list", 6, flags)) return;
 
         ImGui.TableSetupScrollFreeze(0, 1);
         ImGui.TableSetupColumn("Layer", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize);
         ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize);
         ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
         ImGui.TableSetupColumn("Flags", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("Pinned Addon", ImGuiTableColumnFlags.WidthStretch);
         ImGui.TableSetupColumn("Pos", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize);
         ImGui.TableSetupColumn("Size", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize);
         ImGui.TableHeadersRow();
 
-        var pinOptions = depthManager.GetForegroundAddonNames();
-
         // Draw this window first to prevent reordering when clicking into the window
         var rows = windowManager.GetVisibleWindows(filterWindows);
         foreach (var row in rows)
-            if (row.window == self)
-            {
-                DrawWindowRow(row.index, row.window, row.focused, pinOptions);
-                break;
-            }
-        foreach (var row in rows)
         {
             var w = row.window;
-            if (w == self || windowManager.IsAlwaysLifted(w)) continue;
-            DrawWindowRow(row.index, w, row.focused, pinOptions);
+            if (config.IsAlwaysLifted(w)) continue;
+            DrawWindowRow(row.index, w, row.focused);
         }
 
         ImGui.EndTable();
     }
 
-    private unsafe void DrawWindowRow(int i, ImGuiWindowPtr w, bool focused, List<string> pinOptions)
+    private unsafe void DrawWindowRow(int i, ImGuiWindowPtr w, bool focused)
     {
         bool isOverlay = windowManager.IsVisibleOverlay(w);
         ImGui.TableNextRow();
@@ -237,40 +228,6 @@ internal sealed class ConfigWindow : Window
 
         ImGui.TableNextColumn();
         ImGui.TextUnformatted("" + w.Flags);
-
-        ImGui.TableNextColumn();
-        using (ImRaii.Disabled(isOverlay))
-        {
-            using var id = ImRaii.PushId((int)w.ID);
-            using var pinColor = ImRaii.PushColor(ImGuiCol.Text, normalText);
-            string? current = config.GetPinnedAddon(w);
-            float resetWidth = ImGui.GetFrameHeight();
-            float spacing = ImGui.GetStyle().ItemInnerSpacing.X;
-            ImGui.SetNextItemWidth(-(resetWidth + spacing));
-            using (var combo = ImRaii.Combo("##pin", current ?? NullAddonName))
-            {
-                if (combo)
-                {
-                    if (ImGui.Selectable(NullAddonName, current is null))
-                        config.SetPinOverride(w, null);
-                    // Keep a pin whose addon isn't currently loaded selectable
-                    if (current is not null && !pinOptions.Contains(current))
-                        if (ImGui.Selectable($"{current} (not loaded)", true)) { }
-                    foreach (var addon in pinOptions)
-                        if (ImGui.Selectable(addon, addon == current))
-                            config.SetPinOverride(w, addon);
-                }
-            }
-            ImGui.SameLine(0, spacing);
-            using (ImRaii.Disabled(!config.HasPinOverride(w)))
-            {
-                using (ImRaii.PushFont(UiBuilder.IconFont))
-                    if (ImGui.Button(FontAwesomeIcon.Undo.ToIconString(), new Vector2(resetWidth)))
-                        config.RemovePinOverride(w);
-            }
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Reset to default");
-        }
 
         ImGui.TableNextColumn();
         ImGui.TextUnformatted($"{w.Pos.X:F0}, {w.Pos.Y:F0}");

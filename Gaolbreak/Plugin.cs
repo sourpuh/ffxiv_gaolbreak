@@ -36,13 +36,16 @@ public sealed class Plugin : IDalamudPlugin
     private readonly OverlayWindow bgOverlay;
     private readonly IndicatorWindow indicator;
     private readonly ConfigWindow configWindow;
+    private readonly DynamicConfig remoteConfig;
     private readonly Config config;
 
     public Plugin()
     {
-        config = new(PluginInterface);
+        remoteConfig = new DynamicConfig(PluginInterface);
+        config = new(PluginInterface, remoteConfig);
         windowManager = new(config);
         depthManager = new DepthManager(config, GameGui);
+        remoteConfig.OnUpdated += OnRemoteConfigUpdated;
         capture = new UICapture(config);
         heartbeat = new HeartbeatWriter();
         var name = PluginInterface.InternalName;
@@ -83,6 +86,7 @@ public sealed class Plugin : IDalamudPlugin
         AddonLifecycle.UnregisterListener(depthManager.OnNamePlateRequestedUpdate);
         AddonLifecycle.UnregisterListener(windowManager.OnAddonPostShow);
         depthManager.OnForegroundAddonShown -= OnForegroundAddonShown;
+        remoteConfig.OnUpdated -= OnRemoteConfigUpdated;
         config.OnEnableChanged -= OnEnableChangedHandler;
         fgOverlay.OnAddonLmbDown -= windowManager.QueuePinLift;
         fgOverlay.OnWindowLmbDown -= depthManager.OnWindowLmbDown;
@@ -97,6 +101,12 @@ public sealed class Plugin : IDalamudPlugin
         windowSystem.RemoveAllWindows();
         capture.Dispose();
         heartbeat.Dispose();
+        remoteConfig.Dispose();
+    }
+
+    private void OnRemoteConfigUpdated()
+    {
+        if (config.Enable) depthManager.InvalidateAll();
     }
 
     private void OnForegroundAddonShown() => liftFgOverlay = true;

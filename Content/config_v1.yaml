@@ -1,0 +1,51 @@
+version: 1
+
+# ImGui window IDs that should stay in the FG.
+foregroundWindowIds:
+  - 0x88AE4BAD # Gaolbreak ###GaolbreakIndicator
+  - 0xE73BC75C # ResPls ##rezRects
+  
+# ImGui window name prefixes that should stay in the FG.
+foregroundWindowPrefixes:
+  - "##NotifyMainWindow"
+
+# Game addon -> ImGui window IDs.
+defaultPins:
+  FieldMarker:
+    - 0x3E3947D9 # Waymark Preset Plugin Library
+  AreaMap:
+    - 0xBA3B099F # QuestAWAY quick enable
+  GoldSaucerInfo:
+    - 0x5DDFA2F0 # Saucy
+    - 0x7EFB6976 # Saucy
+  ContentsReplaySetting:
+    - 0x1D13E817 # A Realm Recorded
+
+# Game addons that can be lifted to the FG.
+liftableAddons:
+  - _ActionCross
+  - _ActionDoubleCrossL
+  - _ActionDoubleCrossR
+  - _BagWidget
+  - _PartyList
+  - _EnemyList
+  - _DTR
+  - _ParameterWidget
+  - _MainCommand
+  - _Money
+  - _LimitBreak
+  - _FocusTargetInfo
+  - _ContentGauge
+  - _ToDoList
+  - _CastBar
+  - _Exp
+  - _ActionContents
+  - ScenarioTree
+
+# Game addons name prefixes that can be lifted to the FG.
+liftableAddonPrefixes:
+  - _ActionBar
+  - _Status
+  - _AllianceList
+  - _TargetInfo
+  - JobHud

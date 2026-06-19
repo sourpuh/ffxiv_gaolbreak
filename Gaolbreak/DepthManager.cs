@@ -14,37 +14,6 @@ internal unsafe class DepthManager(Config config, IGameGui gameGui)
     private const uint MaxBackgroundDepthLayer = 3;
     private const int NamePlateUseDepthPriority = 0x8;
 
-    // Addons allowed to move between the BG and the FG.
-    // A Liftable addon sits in the background until the user clicks on it.
-    public static readonly HashSet<string> LiftableAddons = [
-        "_ActionCross",
-        "_ActionDoubleCrossL",
-        "_ActionDoubleCrossR",
-        "_BagWidget",
-        "_PartyList",
-        "_EnemyList",
-        "_DTR",
-        "_ParameterWidget",
-        "_MainCommand",
-        "_Money",
-        "_LimitBreak",
-        "_FocusTargetInfo",
-        "_ContentGauge",
-        "_ToDoList",
-        "_CastBar",
-        "_Exp",
-        "_ActionContents", // TODO this one looks different in Gaolbreak like shadow is on top?
-        "ScenarioTree",
-    ];
-
-    public static readonly HashSet<string> LiftableAddonPrefixes = [
-        "_ActionBar",
-        "_Status",
-        "_AllianceList",
-        "_TargetInfo",
-        "JobHud",
-    ];
-
     // Liftable addons currently lifted to the FG.
     public readonly HashSet<string> LiftableForeground = [];
     // Addons the game rewrites node flags as it shows/animates entries clearing the depth-priority flag set on PostShow.
@@ -97,14 +66,6 @@ internal unsafe class DepthManager(Config config, IGameGui gameGui)
         }
     }
 
-    public bool IsLiftable(string name)
-    {
-        if (LiftableAddons.Contains(name)) return true;
-        foreach (var prefix in LiftableAddonPrefixes)
-            if (name.StartsWith(prefix, StringComparison.Ordinal)) return true;
-        return false;
-    }
-
     public void Invalidate(string name) => PendingReapply.Add(name);
 
     public void InvalidateAll()
@@ -141,7 +102,7 @@ internal unsafe class DepthManager(Config config, IGameGui gameGui)
 
     public void OnAddonLmbDown(string addonName)
     {
-        if (IsLiftable(addonName) && LiftableForeground.Add(addonName))
+        if (config.IsAddonLiftable(addonName) && LiftableForeground.Add(addonName))
             Invalidate(addonName);
     }
 
@@ -162,24 +123,6 @@ internal unsafe class DepthManager(Config config, IGameGui gameGui)
         }
     }
 
-    public List<string> GetForegroundAddonNames()
-    {
-        var names = new SortedSet<string>(StringComparer.Ordinal);
-        var manager = (AtkUnitManager*)RaptureAtkUnitManager.Instance();
-        if (manager != null)
-        {
-            var list = &manager->AllLoadedUnitsList;
-            for (var i = 0; i < list->Count; i++)
-            {
-                var addon = list->Entries[i].Value;
-                if (addon == null || addon->DepthLayer < MaxBackgroundDepthLayer) continue;
-                var name = addon->NameString;
-                if (!IsLiftable(name)) names.Add(name);
-            }
-        }
-        return [.. names];
-    }
-
     private static float LayeredBackgroundDepth(AtkUnitBase* addon) =>
         BackgroundDepth + LayerDepthStep * addon->DepthLayer;
 
@@ -190,7 +133,7 @@ internal unsafe class DepthManager(Config config, IGameGui gameGui)
     {
         if (addon == null || NativeDepthOrderAddons.Contains(name)) return;
 
-        bool useDepth = IsLiftable(name)
+        bool useDepth = config.IsAddonLiftable(name)
             ? !LiftableForeground.Contains(name)
             : addon->DepthLayer <= MaxBackgroundDepthLayer;
 

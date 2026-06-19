@@ -37,8 +37,6 @@ internal unsafe class WindowManager(Config config)
         lastFocusedWindow = ctx.WindowsFocusOrder.LastOrDefault();
     }
 
-    public bool IsAlwaysLifted(ImGuiWindowPtr w) => w == indicator.GetNativeWindow() || w.GetName().StartsWith("##NotifyMainWindow");
-
     public bool IsVisibleOverlay(ImGuiWindowPtr w)
     {
         return w == fgOverlay.GetNativeWindow() || w == bgOverlay.GetNativeWindow();
@@ -85,7 +83,7 @@ internal unsafe class WindowManager(Config config)
         {
             var w = drawOrder[i];
             if (w.IsNull) continue;
-            if (pendingLifts.Contains(w.ID) || IsAlwaysLifted(w))
+            if (pendingLifts.Contains(w.ID) || config.IsAlwaysLifted(w))
                 liftBuffer.Add(w);
         }
         pendingLifts.Clear();
