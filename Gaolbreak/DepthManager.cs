@@ -1,5 +1,6 @@
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Arrays;
@@ -7,11 +8,12 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace Gaolbreak;
 
-internal unsafe class DepthManager(Config config, IGameGui gameGui)
+internal unsafe class DepthManager(Config config, IGameGui gameGui, ICondition condition)
 {
     private const float BackgroundDepth = 0.75f;
     private const float LayerDepthStep = 0.001f;
-    private const uint MaxBackgroundDepthLayer = 3;
+    private const uint MaxBackgroundDepthLayerDefault = 3;
+    private const uint MaxBackgroundDepthLayerCharacterCreator = 1;
     private const int NamePlateUseDepthPriority = 0x8;
 
     // Liftable addons currently lifted to the FG.
@@ -27,6 +29,24 @@ internal unsafe class DepthManager(Config config, IGameGui gameGui)
     private bool FullApplyPending = true;
 
     public event Action? OnForegroundAddonShown;
+
+    public void ConditionChangeDelegate(ConditionFlag flag, bool value)
+    {
+        if (flag == ConditionFlag.CreatingCharacter)
+        {
+            InvalidateAll();
+        }
+    }
+
+    private uint MaxBackgroundDepthLayer
+    {
+        get
+        {
+            if (condition[ConditionFlag.CreatingCharacter])
+                return MaxBackgroundDepthLayerCharacterCreator;
+            return MaxBackgroundDepthLayerDefault;
+        }
+    }
 
     public void OnAddonPostShow(AddonEvent type, AddonArgs args)
     {

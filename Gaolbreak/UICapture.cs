@@ -287,7 +287,6 @@ internal unsafe class UICapture : IDisposable
             if (IsZoning()) return "Zoning";
             if (Plugin.GameGui.GameUiHidden) return "UI hidden";
             if (IsInCutscene()) return "Cutscene";
-            if (IsInCharacterCreator()) return "Character Creator";
             if (IsFaded()) return "Faded";
             return null;
         }
@@ -311,11 +310,10 @@ internal unsafe class UICapture : IDisposable
     private static bool IsInCutscene()
         => Plugin.Condition[ConditionFlag.WatchingCutscene] || Plugin.Condition[ConditionFlag.OccupiedInCutSceneEvent] || Plugin.Condition[ConditionFlag.WatchingCutscene78];
 
-    private static bool IsInCharacterCreator()
-        => Plugin.Condition[ConditionFlag.CreatingCharacter];
-
     private static bool IsFaded()
     {
+        // There's a brief period when loading the character creator that the game destroys and recreates all addons while faded.
+        // The fade addons are also deleted yet the screen stays faded, so there seems to be another fade mechanism I'm missing.
         var fadeMiddle = (AtkUnitBase*)Plugin.GameGui.GetAddonByName("FadeMiddle").Address;
         var fadeBlack = (AtkUnitBase*)Plugin.GameGui.GetAddonByName("FadeBlack").Address;
         return (fadeMiddle != null && fadeMiddle->IsVisible)
@@ -344,7 +342,6 @@ internal unsafe class UICapture : IDisposable
             steps.Add(new("Not zoning", !IsZoning()));
             steps.Add(new("Game UI not hidden", !Plugin.GameGui.GameUiHidden));
             steps.Add(new("Not in a cutscene", !IsInCutscene()));
-            steps.Add(new("Not in a character creator", !IsInCharacterCreator()));
             steps.Add(new("Not faded to black", !IsFaded()));
         }
         catch (Exception e)
