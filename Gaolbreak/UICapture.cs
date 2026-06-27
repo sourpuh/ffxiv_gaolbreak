@@ -30,7 +30,7 @@ internal unsafe class UICapture : IDisposable
     private readonly Hook<SetRenderTargetsDelegate>? SetRenderTargetsHook;
 
     private delegate void ApplySetTargetCommandDelegate(ImmediateContext* self, RenderCommandSetTarget* command);
-    [Signature("E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? D1 47 23", DetourName = nameof(ApplySetTargetCommandDetour))]
+    [Signature("E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? B1 48", DetourName = nameof(ApplySetTargetCommandDetour))]
     private readonly Hook<ApplySetTargetCommandDelegate>? ApplySetTargetHook = null;
 
     private readonly Config config;
