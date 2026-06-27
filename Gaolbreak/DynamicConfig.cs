@@ -9,8 +9,6 @@ internal sealed class DynamicConfigData
     public IReadOnlySet<uint> ForegroundWindowIds { get; init; } = new HashSet<uint>();
     public IReadOnlySet<string> ForegroundWindowPrefixes { get; init; } = new HashSet<string>();
     public IReadOnlyDictionary<string, IReadOnlySet<uint>> DefaultPins { get; init; } = new Dictionary<string, IReadOnlySet<uint>>();
-    public IReadOnlySet<string> LiftableAddons { get; init; } = new HashSet<string>();
-    public IReadOnlySet<string> LiftableAddonPrefixes { get; init; } = new HashSet<string>();
 }
 
 internal sealed class DynamicConfig : IDisposable
@@ -78,8 +76,6 @@ internal sealed class DynamicConfig : IDisposable
         public HashSet<uint>? ForegroundWindowIds { get; set; }
         public HashSet<string>? ForegroundWindowPrefixes { get; set; }
         public Dictionary<string, HashSet<uint>>? DefaultPins { get; set; }
-        public HashSet<string>? LiftableAddons { get; set; }
-        public HashSet<string>? LiftableAddonPrefixes { get; set; }
     }
 
     private static DynamicConfigData Parse(string yaml)
@@ -91,8 +87,6 @@ internal sealed class DynamicConfig : IDisposable
             ForegroundWindowIds = dto.ForegroundWindowIds ?? [],
             ForegroundWindowPrefixes = dto.ForegroundWindowPrefixes ?? [],
             DefaultPins = (dto.DefaultPins ?? new()).ToDictionary(kvp => kvp.Key, kvp => (IReadOnlySet<uint>)kvp.Value),
-            LiftableAddons = dto.LiftableAddons ?? [],
-            LiftableAddonPrefixes = dto.LiftableAddonPrefixes ?? [],
         };
     }
 

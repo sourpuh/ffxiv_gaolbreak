@@ -1,10 +1,13 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
+using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
+using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Gaolbreak.Overlay;
 using System.Numerics;
-using static Gaolbreak.UICapture;
+using static Gaolbreak.Capturer;
 
 namespace Gaolbreak;
 
@@ -12,22 +15,23 @@ internal sealed class ConfigWindow : Window
 {
     private const string NullAddonName = "(none)";
     private readonly Config config;
-    private readonly UICapture capture;
+    private readonly Capturer capture;
     private readonly UIOverlayWindow fgOverlay;
     private readonly OverlayWindow bgOverlay;
-    private readonly DepthManager depthManager;
+    private readonly AddonLayer addonLayer;
     private readonly WindowManager windowManager;
 
     private bool filterWindows = true;
+    private bool filterAddonsVisible = true;
 
-    public ConfigWindow(string name, Config config, UICapture capture, UIOverlayWindow fgOverlay, OverlayWindow bgOverlay, DepthManager depthManager, WindowManager windowManager)
+    public ConfigWindow(string name, Config config, Capturer capture, UIOverlayWindow fgOverlay, OverlayWindow bgOverlay, AddonLayer addonLayer, WindowManager windowManager)
         : base(name)
     {
         this.config = config;
         this.capture = capture;
         this.fgOverlay = fgOverlay;
         this.bgOverlay = bgOverlay;
-        this.depthManager = depthManager;
+        this.addonLayer = addonLayer;
         this.windowManager = windowManager;
         IsOpen = false;
         SizeCondition = ImGuiCond.FirstUseEver;
@@ -54,6 +58,12 @@ internal sealed class ConfigWindow : Window
         if (ImGui.BeginTabItem("Windows"))
         {
             DrawWindowsTab(self);
+            ImGui.EndTabItem();
+        }
+
+        if (ImGui.BeginTabItem("Addons"))
+        {
+            DrawAddonsTab();
             ImGui.EndTabItem();
         }
 
@@ -105,7 +115,7 @@ internal sealed class ConfigWindow : Window
         else
         {
             float paneWidth = ImGui.GetContentRegionAvail().X;
-            ImGui.Image((ImTextureID)(ulong)capture.Handle, new Vector2(paneWidth, paneWidth * capture.Aspect));
+            ImGui.Image((ImTextureID)(ulong)capture.PresentHandle, new Vector2(paneWidth, paneWidth * capture.Aspect));
         }
     }
 
@@ -200,6 +210,75 @@ internal sealed class ConfigWindow : Window
         ImGui.EndTable();
     }
 
+    private unsafe void DrawAddonsTab()
+    {
+        ImGui.Checkbox("Visible only", ref filterAddonsVisible);
+
+        const ImGuiTableFlags flags =
+            ImGuiTableFlags.Borders |
+            ImGuiTableFlags.RowBg |
+            ImGuiTableFlags.ScrollY |
+            ImGuiTableFlags.Resizable |
+            ImGuiTableFlags.SizingStretchSame;
+
+        if (!ImGui.BeginTable("##addons_list", 5, flags)) return;
+
+        ImGui.TableSetupScrollFreeze(0, 1);
+        ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("Layer", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize);
+        ImGui.TableSetupColumn("Capture", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize);
+        ImGui.TableSetupColumn("Pos", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize);
+        ImGui.TableSetupColumn("Size", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize);
+        ImGui.TableHeadersRow();
+
+        var manager = RaptureAtkUnitManager.Instance();
+        if (manager != null)
+        {
+            var addons = new List<(string Name, uint Layer, bool Visible, bool Bg, Vector2 Pos, Vector2 Size)>();
+            var list = &manager->AllLoadedUnitsList;
+            for (var i = 0; i < list->Count; i++)
+            {
+                var addon = list->Entries[i].Value;
+                if (addon == null) continue;
+                bool visible = addon->IsVisible;
+                if (filterAddonsVisible && !visible) continue;
+                string name = addon->NameString;
+                if (string.IsNullOrEmpty(name)) continue;
+                var pos = new Vector2(addon->X, addon->Y);
+                var size = new Vector2(addon->GetScaledWidth(true), addon->GetScaledHeight(true));
+                addons.Add((name, addon->DepthLayer, visible, addonLayer.IsBackground(addon), pos, size));
+            }
+            addons.Sort((a, b) => string.CompareOrdinal(a.Name, b.Name));
+
+            var origin = ImGuiHelpers.MainViewport.Pos;
+            for (int idx = 0; idx < addons.Count; idx++)
+            {
+                var a = addons[idx];
+                ImGui.TableNextRow();
+                using var greyed = ImRaii.PushColor(ImGuiCol.Text, 0xFF808080u, !a.Visible);
+
+                ImGui.TableNextColumn();
+                ImGui.Selectable($"{a.Name}##addon{idx}", false, ImGuiSelectableFlags.SpanAllColumns);
+                if (ImGui.IsItemHovered() && a.Size is { X: > 0, Y: > 0 })
+                    ImGui.GetForegroundDrawList().AddRect(origin + a.Pos, origin + a.Pos + a.Size, 0xFF00FFFFu, 0f, ImDrawFlags.None, 2f);
+
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted(a.Layer.ToString());
+
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted(a.Bg ? "BG" : "FG");
+
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted($"{a.Pos.X:F0}, {a.Pos.Y:F0}");
+
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted($"{a.Size.X:F0} x {a.Size.Y:F0}");
+            }
+        }
+
+        ImGui.EndTable();
+    }
+
     private unsafe void DrawWindowRow(int i, ImGuiWindowPtr w, bool focused)
     {
         bool isOverlay = windowManager.IsVisibleOverlay(w);
@@ -214,7 +293,6 @@ internal sealed class ConfigWindow : Window
             ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, GetStyleColor(ImGuiCol.TabActive));
         }
 
-        uint normalText = GetStyleColor(ImGuiCol.Text);
         using var ineligible = ImRaii.PushColor(ImGuiCol.Text, 0xFF808080u, !isOverlay && !WindowManager.IsHoverEligible(w));
 
         ImGui.TableNextColumn();
@@ -227,7 +305,7 @@ internal sealed class ConfigWindow : Window
         ImGui.TextUnformatted(w.Name);
 
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted("" + w.Flags);
+        ImGui.TextUnformatted(w.Flags.ToString());
 
         ImGui.TableNextColumn();
         ImGui.TextUnformatted($"{w.Pos.X:F0}, {w.Pos.Y:F0}");

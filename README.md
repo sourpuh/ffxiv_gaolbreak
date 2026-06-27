@@ -7,12 +7,12 @@ A [Dalamud](https://github.com/goatcorp/Dalamud) plugin that breaks FFXIV's UI o
 * Layer game windows with plugin windows
 * Allow 3D overlay plugins to draw under the game's UI
 * Prevent ReShade or other graphics effects from affecting the UI
-* Pin plugin windows to game windows
 * "Indicator" dot on top left shows current status
   * Green - Enabled
   * Yellow - Inactive due to game state
-  * Red - Disabled
-  * Left click is a killswitch
+  * Orange - Self Disabled (requires plugin update)
+  * Red - User Disabled (killswitched)
+  * Left click toggles killswitch
   * Right click opens the plugin config 
 <br clear="right"/>
 
@@ -22,7 +22,7 @@ A [Dalamud](https://github.com/goatcorp/Dalamud) plugin that breaks FFXIV's UI o
 
 ## Known issues
 * TintAdjust effects (Gamma and Color Filters) do not apply to Gaolbreak UI like it does the native UI.
-* BLM enochian meter is not clipped.
+* Pieces of a few Addons that multiply the game's color (such as the duty actionbar) may appear darker.
 
 ## Support
 If you found a bug or have suggestions for the plugin, please do one of the following:
@@ -34,6 +34,5 @@ If you found a bug or have suggestions for the plugin, please do one of the foll
 ## About
 Gaolbreak's implementation uses the following primary components:
 
-1. UI Capture - Redirects the UI RenderCommands from targetting the game's BackBuffer to textures owned by Gaolbreak. The background (everything with depth priority enabled) is separated from the foreground (everything without depth priority enabled).
-2. Depth Manager - Moves most non-window addons into the background by enabling depth priority on them. These addons are assigned depths less than the camera's near plane so they will never be occluded.
-3. Window Manager + UI Overlay Window - These work together to direct hovers and clicks to the appropriate native or ImGui components, and to bring windows to the foreground when necessary. Most plugin windows will draw above the background. Those that wish can use ImGui methods to send to the back of the draw order to draw under the UI.
+1. Capturer + Capture Injector - Redirects the UI RenderCommands from targetting the game's BackBuffer to textures owned by Gaolbreak. The capture injector tracks which draw commands correspond to which addon and injects special clipmask draw commands that are later converted to SetRenderTarget calls to the captures.
+2. Window Manager + UI Overlay Window - These work together to direct hovers and clicks to the appropriate native or ImGui components, and to bring windows to the foreground when necessary. Most plugin windows will draw above the background. Those that wish can use ImGui methods to send to the back of the draw order to draw under the UI.

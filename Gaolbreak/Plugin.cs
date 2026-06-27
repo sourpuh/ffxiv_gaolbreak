@@ -29,8 +29,8 @@ public sealed class Plugin : IDalamudPlugin
 
     private readonly WindowSystem windowSystem = new("GaolbreakUI");
     private readonly WindowManager windowManager;
-    private readonly DepthManager depthManager;
-    private readonly UICapture capture;
+    private readonly AddonLayer addonLayer;
+    private readonly Capturer capturer;
     private readonly HeartbeatWriter heartbeat;
     private readonly UIOverlayWindow fgOverlay;
     private readonly OverlayWindow bgOverlay;
@@ -44,31 +44,28 @@ public sealed class Plugin : IDalamudPlugin
         remoteConfig = new DynamicConfig(PluginInterface);
         config = new(PluginInterface, remoteConfig);
         windowManager = new(config);
-        depthManager = new DepthManager(config, GameGui, Condition);
-        remoteConfig.OnUpdated += OnRemoteConfigUpdated;
-        capture = new UICapture(config);
+        addonLayer = new AddonLayer(config, GameGui, Condition);
+        capturer = new Capturer(config, addonLayer, Hooker);
         heartbeat = new HeartbeatWriter();
         var name = PluginInterface.InternalName;
-        fgOverlay = new UIOverlayWindow($"###{name}ForegroundOverlay", config, capture.DrawFgTexture, Hooker, windowManager);
-        bgOverlay = new OverlayWindow($"###{name}BackgroundOverlay", capture.DrawBgTexture);
-        indicator = new IndicatorWindow($"###{name}Indicator", config, capture, OpenConfig);
-        configWindow = new ConfigWindow($"{name}##Config", config, capture, fgOverlay, bgOverlay, depthManager, windowManager);
+        fgOverlay = new UIOverlayWindow($"###{name}ForegroundOverlay", config, addonLayer, capturer.DrawFgTexture, Hooker, windowManager);
+        bgOverlay = new OverlayWindow($"###{name}BackgroundOverlay", capturer.DrawBgTexture);
+        indicator = new IndicatorWindow($"###{name}Indicator", config, capturer, OpenConfig);
+        configWindow = new ConfigWindow($"{name}##Config", config, capturer, fgOverlay, bgOverlay, addonLayer, windowManager);
         windowSystem.AddWindow(configWindow);
         windowManager.InitOverlays(fgOverlay, bgOverlay, indicator);
 
         PluginInterface.UiBuilder.DisableAutomaticUiHide = true;
         PluginInterface.UiBuilder.Draw += OnDraw;
         PluginInterface.UiBuilder.OpenConfigUi += OpenConfig;
-        AddonLifecycle.RegisterListener(AddonEvent.PreDraw, DepthManager.ContinuousReapplyAddons, depthManager.OnContinuousReapplyAddonPreDraw);
-        AddonLifecycle.RegisterListener(AddonEvent.PreRequestedUpdate, "NamePlate", depthManager.OnNamePlateRequestedUpdate);
-        AddonLifecycle.RegisterListener(AddonEvent.PostShow, depthManager.OnAddonPostShow);
+        AddonLifecycle.RegisterListener(AddonEvent.PostShow, addonLayer.OnAddonPostShow);
         AddonLifecycle.RegisterListener(AddonEvent.PostShow, windowManager.OnAddonPostShow);
-        depthManager.OnForegroundAddonShown += OnForegroundAddonShown;
-        Condition.ConditionChange += depthManager.ConditionChangeDelegate;
-        config.OnEnableChanged += OnEnableChangedHandler;
+        AddonLifecycle.RegisterListener(AddonEvent.PreDraw, addonLayer.OnAddonPreDraw);
+        AddonLifecycle.RegisterListener(AddonEvent.PostDraw, addonLayer.OnAddonPostDraw);
+        addonLayer.OnForegroundAddonShown += OnForegroundAddonShown;
         fgOverlay.OnAddonLmbDown += windowManager.QueuePinLift;
-        fgOverlay.OnWindowLmbDown += depthManager.OnWindowLmbDown;
-        fgOverlay.OnAddonLmbDown += depthManager.OnAddonLmbDown;
+        fgOverlay.OnWindowLmbDown += addonLayer.OnWindowLmbDown;
+        fgOverlay.OnAddonLmbDown += addonLayer.OnAddonLmbDown;
         Framework.Update += Update;
 
         var commandInfo = new CommandInfo((_, _) => OpenConfig())
@@ -82,55 +79,37 @@ public sealed class Plugin : IDalamudPlugin
     {
         PluginInterface.UiBuilder.Draw -= OnDraw;
         PluginInterface.UiBuilder.OpenConfigUi -= OpenConfig;
-        AddonLifecycle.UnregisterListener(depthManager.OnAddonPostShow);
-        AddonLifecycle.UnregisterListener(depthManager.OnContinuousReapplyAddonPreDraw);
-        AddonLifecycle.UnregisterListener(depthManager.OnNamePlateRequestedUpdate);
+        AddonLifecycle.UnregisterListener(addonLayer.OnAddonPostShow);
         AddonLifecycle.UnregisterListener(windowManager.OnAddonPostShow);
-        depthManager.OnForegroundAddonShown -= OnForegroundAddonShown;
-        Condition.ConditionChange -= depthManager.ConditionChangeDelegate;
-        remoteConfig.OnUpdated -= OnRemoteConfigUpdated;
-        config.OnEnableChanged -= OnEnableChangedHandler;
+        AddonLifecycle.UnregisterListener(addonLayer.OnAddonPreDraw);
+        AddonLifecycle.UnregisterListener(addonLayer.OnAddonPostDraw);
+        addonLayer.OnForegroundAddonShown -= OnForegroundAddonShown;
         fgOverlay.OnAddonLmbDown -= windowManager.QueuePinLift;
-        fgOverlay.OnWindowLmbDown -= depthManager.OnWindowLmbDown;
-        fgOverlay.OnAddonLmbDown -= depthManager.OnAddonLmbDown;
+        fgOverlay.OnWindowLmbDown -= addonLayer.OnWindowLmbDown;
+        fgOverlay.OnAddonLmbDown -= addonLayer.OnAddonLmbDown;
         Framework.Update -= Update;
         CommandManager.RemoveHandler(CommandName);
 
-        depthManager.RestoreAll();
         fgOverlay.Dispose();
         bgOverlay.Dispose();
         indicator.Dispose();
         windowSystem.RemoveAllWindows();
-        capture.Dispose();
+        capturer.Dispose();
         heartbeat.Dispose();
         remoteConfig.Dispose();
     }
 
-    private void OnRemoteConfigUpdated()
-    {
-        if (config.Enable) depthManager.InvalidateAll();
-    }
-
     private void OnForegroundAddonShown() => liftFgOverlay = true;
-
-    private void OnEnableChangedHandler(bool enabled)
-    {
-        if (enabled) depthManager.InvalidateAll();
-        else depthManager.RestoreAll();
-    }
 
     private void OpenConfig() => configWindow.IsOpen = !configWindow.IsOpen;
 
     internal void Update(IFramework framework)
     {
-        capture.Update();
-        capture.CollectDiagnostics = configWindow.IsOpen;
+        capturer.Update();
+        capturer.CollectDiagnostics = configWindow.IsOpen;
 
-        if (config.Enable)
-        {
-            if (capture.CaptureActive && capture.UiFresh) heartbeat.Tick();
-            depthManager.Update();
-        }
+        if (config.Enable && capturer.CaptureActive && capturer.UiFresh)
+            heartbeat.Tick();
     }
 
     private void OnDraw()
@@ -146,8 +125,8 @@ public sealed class Plugin : IDalamudPlugin
                 return;
             }
 
-            bool showCapture = capture.UiFresh && (capture.CaptureActive || prevCaptureActive);
-            prevCaptureActive = capture.CaptureActive;
+            bool showCapture = capturer.UiFresh && (capturer.CaptureActive || prevCaptureActive);
+            prevCaptureActive = capturer.CaptureActive;
             if (showCapture)
             {
                 fgOverlay.Draw();

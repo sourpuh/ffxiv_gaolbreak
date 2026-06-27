@@ -12,6 +12,7 @@ internal unsafe class UIOverlayWindow : OverlayWindow
     private delegate void GetAddonCollisionDelegate(AtkUnitManager* self, AddonCollision* collisionInfo, short x, short y);
     private readonly Hook<GetAddonCollisionDelegate>? hook;
     private readonly WindowManager windowManager;
+    private readonly AddonLayer addonLayer;
     private readonly Config config;
     private AtkUnitBase* hoverAddon;
     private enum PressOwner { None, Window, Game }
@@ -27,10 +28,11 @@ internal unsafe class UIOverlayWindow : OverlayWindow
     public event Action<string>? OnWindowLmbDown;
     public event Action<string>? OnAddonLmbDown;
 
-    public UIOverlayWindow(string name, Config config, Action<ImDrawListPtr> drawAction, IGameInteropProvider hooker, WindowManager windowManager)
+    public UIOverlayWindow(string name, Config config, AddonLayer addonLayer, Action<ImDrawListPtr> drawAction, IGameInteropProvider hooker, WindowManager windowManager)
         : base(name, drawAction)
     {
         this.config = config;
+        this.addonLayer = addonLayer;
         this.windowManager = windowManager;
         try
         {
@@ -53,7 +55,7 @@ internal unsafe class UIOverlayWindow : OverlayWindow
         var mouse = ImGui.GetMousePos();
         hoverAddon = AddonCollisionResolver.GetAddonCollision((short)mouse.X, (short)mouse.Y);
         AtkUnitBase* intersecting = hoverAddon;
-        bool bgAddonHovered = IsBackgroundAddon(intersecting);
+        bool bgAddonHovered = addonLayer.IsBackground(intersecting);
         if (bgAddonHovered && !windowHovered)
         {
             ImGuiWindowPtr behind = windowManager.WindowAt(ImGui.GetMousePos(), overlay);
@@ -101,9 +103,6 @@ internal unsafe class UIOverlayWindow : OverlayWindow
 
         return onAddon ? ImGuiWindowFlags.None : ImGuiWindowFlags.NoInputs;
     }
-
-    private static bool IsBackgroundAddon(AtkUnitBase* addon)
-        => addon != null && addon->RootNode != null && addon->RootNode->NodeFlags.HasFlag(NodeFlags.UseDepthBasedPriority);
 
     private static string OwnerLabel(PressOwner o) => o switch
     {
@@ -154,7 +153,7 @@ internal unsafe class UIOverlayWindow : OverlayWindow
             return false;
 
         var hovered = windowManager.WindowAt(new(x, y), overlay);
-        if (IsBackgroundAddon(AddonCollisionResolver.GetAddonCollision(x, y)))
+        if (addonLayer.IsBackground(AddonCollisionResolver.GetAddonCollision(x, y)))
             return !hovered.IsNull;
 
         return !hovered.IsNull && windowManager.IsInFront(hovered, overlay);

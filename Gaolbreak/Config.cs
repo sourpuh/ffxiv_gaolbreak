@@ -1,6 +1,7 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Configuration;
 using Dalamud.Plugin;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 
 namespace Gaolbreak;
 
@@ -40,18 +41,7 @@ internal sealed class Config
         pluginInterface.SavePluginConfig(data);
     }
 
-    public event Action<bool>? OnEnableChanged;
-
-    public bool Enable
-    {
-        get;
-        set
-        {
-            if (field == value) return;
-            field = value;
-            OnEnableChanged?.Invoke(value);
-        }
-    } = true;
+    public bool Enable { get; set; } = true;
 
     public bool EnableReorder
     {
@@ -87,11 +77,34 @@ internal sealed class Config
 
     public bool IsAddonLiftable(string addonName)
     {
-        var rc = remote.Current;
-        if (rc.LiftableAddons.Contains(addonName)) return true;
-        foreach (var prefix in rc.LiftableAddonPrefixes)
-            if (addonName.StartsWith(prefix, StringComparison.Ordinal)) return true;
-        return false;
+        var set = HudMoveable();
+        if (set.Count == 0) return false;
+        if (set.Contains(addonName)) return true;
+        if (addonName.StartsWith("ChatLog", StringComparison.Ordinal)) return true;
+        int end = addonName.Length;
+        while (end > 0 && char.IsAsciiDigit(addonName[end - 1])) end--;
+        return end != addonName.Length && set.Contains(addonName[..end]);
+    }
+
+    private HashSet<string>? hudMoveable;
+    private HashSet<string> HudMoveable()
+    {
+        if (hudMoveable != null) return hudMoveable;
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            foreach (var entry in HudLayoutAddon.GetSpan())
+            {
+                var name = entry.AddonName.ToString();
+                if (!string.IsNullOrEmpty(name)) set.Add(name);
+            }
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.Warning(e, "Dynamic config: failed to read the HudLayoutAddon registry");
+        }
+        hudMoveable = set;
+        return set;
     }
 
     private IReadOnlyDictionary<string, IReadOnlySet<uint>> DefaultPins => remote.Current.DefaultPins;

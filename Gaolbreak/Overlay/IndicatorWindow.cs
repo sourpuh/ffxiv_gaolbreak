@@ -6,10 +6,10 @@ namespace Gaolbreak.Overlay;
 internal class IndicatorWindow : OverlayWindow
 {
     private readonly Config config;
-    private readonly UICapture capture;
+    private readonly Capturer capture;
     private readonly Action onRightClick;
 
-    public IndicatorWindow(string name, Config config, UICapture capture, Action onRightClick)
+    public IndicatorWindow(string name, Config config, Capturer capture, Action onRightClick)
         : base(name)
     {
         this.config = config;
@@ -24,8 +24,10 @@ internal class IndicatorWindow : OverlayWindow
         if (!config.EnableIndicator) return;
 
         string? inactiveReason = capture.InactiveReason();
-        uint dotColor = !config.Enable ? 0xFF2222DD
-                      : inactiveReason == null ? 0xFF22DD22
+        bool broken = capture.HooksBroken;
+        uint dotColor = broken ? 0xFF00A5FFu
+                      : !config.Enable ? 0xFF2222DDu
+                      : inactiveReason == null ? 0xFF22DD22u
                       : 0xFF00FFFFu;
         const float dotRadius = 4f;
         var pad = new Vector2(6f, 6f);
@@ -37,7 +39,9 @@ internal class IndicatorWindow : OverlayWindow
         bool rightClicked = ImGui.IsItemClicked(ImGuiMouseButton.Right);
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(!config.Enable ? "Off" : inactiveReason == null ? "On" : inactiveReason);
+            ImGui.SetTooltip(broken ? inactiveReason
+                           : !config.Enable ? "Off"
+                           : inactiveReason == null ? "On" : inactiveReason);
         }
 
         dl.AddCircleFilled(p + pad, dotRadius + 2, 0xB0000000u);
