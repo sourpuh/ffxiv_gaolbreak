@@ -1,4 +1,5 @@
-# Gaolbreak UI
+<h1><img align="center" height=100 src="./ReadmeImages/icon.png" alt="Thanks Leonhart for the Icon!">  Gaolbreak</h1>
+
 A [Dalamud](https://github.com/goatcorp/Dalamud) plugin that breaks FFXIV's UI out of its gaol. Gaolbreak captures the native game UI and displays it as a plugin window.
 
 ## Features
@@ -13,7 +14,7 @@ A [Dalamud](https://github.com/goatcorp/Dalamud) plugin that breaks FFXIV's UI o
   * Orange - Self Disabled (requires plugin update)
   * Red - User Disabled (killswitched)
   * Left click toggles killswitch
-  * Right click opens the plugin config 
+  * Right click opens the plugin config
 <br clear="right"/>
 
 ## Installation
