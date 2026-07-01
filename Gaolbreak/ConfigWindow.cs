@@ -1,13 +1,10 @@
 using Dalamud.Bindings.ImGui;
-using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 using Gaolbreak.Overlay;
 using System.Numerics;
-using static Gaolbreak.Capturer;
 
 namespace Gaolbreak;
 
@@ -258,6 +255,9 @@ internal sealed class ConfigWindow : Window
                 using var greyed = ImRaii.PushColor(ImGuiCol.Text, 0xFF808080u, !a.Visible);
 
                 ImGui.TableNextColumn();
+                if (ImGui.SmallButton($"copy##addon{idx}"))
+                    ImGui.SetClipboardText(a.Name);
+                ImGui.SameLine();
                 ImGui.Selectable($"{a.Name}##addon{idx}", false, ImGuiSelectableFlags.SpanAllColumns);
                 if (ImGui.IsItemHovered() && a.Size is { X: > 0, Y: > 0 })
                     ImGui.GetForegroundDrawList().AddRect(origin + a.Pos, origin + a.Pos + a.Size, 0xFF00FFFFu, 0f, ImDrawFlags.None, 2f);
@@ -293,12 +293,13 @@ internal sealed class ConfigWindow : Window
             ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, GetStyleColor(ImGuiCol.TabActive));
         }
 
-        using var ineligible = ImRaii.PushColor(ImGuiCol.Text, 0xFF808080u, !isOverlay && !WindowManager.IsHoverEligible(w));
-
         ImGui.TableNextColumn();
         ImGui.TextUnformatted(i.ToString());
 
         ImGui.TableNextColumn();
+        if (ImGui.SmallButton($"copy##{i}"))
+            ImGui.SetClipboardText($"0x{w.ID:X8}");
+        ImGui.SameLine();
         ImGui.TextUnformatted($"{w.ID:X8}");
 
         ImGui.TableNextColumn();
