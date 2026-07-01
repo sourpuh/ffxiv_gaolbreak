@@ -4,7 +4,7 @@ version: 1
 foregroundWindowIds:
   - 0x88AE4BAD # Gaolbreak ###GaolbreakIndicator
   - 0xE73BC75C # ResPls ##rezRects
-  
+
 # ImGui window name prefixes that should stay in the FG.
 foregroundWindowPrefixes:
   - "##NotifyMainWindow"
@@ -20,6 +20,16 @@ defaultPins:
     - 0x7EFB6976 # Saucy
   ContentsReplaySetting:
     - 0x1D13E817 # A Realm Recorded
+  RetainerList:
+    - 0xF9BB4082 # Allagan Market
+  RetainerSellList:
+    - 0x2E5F7C41 # Allagan Market
+    - 0xF3A990BA # MarketBuddy
+  RetainerSell:
+    - 0x4C909AC4 # Allagan Market
+  RecipeNote:
+    - 0x64EFA525 # Artisan
+    - 0x2268D9F6 # Artisan
 
 # Game addons that can be lifted to the FG.
 liftableAddons:
