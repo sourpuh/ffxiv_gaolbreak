@@ -5,7 +5,9 @@ namespace Gaolbreak.Capture;
 
 internal sealed unsafe class CaptureInjector : IDisposable
 {
-    private const int GroupFg = 0, GroupBg = 1, GroupBgDepth = 2;
+    private const int GroupFg = 0, GroupBg = 1, GroupBgDepth = 2, GroupBgDepthInherit = 3;
+    private const int SentinelCount = 4;
+    private static readonly int BeaconHash = RestBeaconAddon.InternalName.GetHashCode();
 
     private readonly Config config;
     private readonly AddonLayer addonLayer;
@@ -29,7 +31,7 @@ internal sealed unsafe class CaptureInjector : IDisposable
         this.addonLayer = addonLayer;
         this.fg = fg;
         this.bg = bg;
-        captureSentinels = (ClipMaskDrawCommand*)NativeMemory.Alloc(3 * (nuint)sizeof(ClipMaskDrawCommand));
+        captureSentinels = (ClipMaskDrawCommand*)NativeMemory.Alloc(SentinelCount * (nuint)sizeof(ClipMaskDrawCommand));
     }
 
     public void Begin(AtkServer* self)
@@ -90,11 +92,18 @@ internal sealed unsafe class CaptureInjector : IDisposable
         captureSentinels[GroupFg].Initialize(fg.NativeTex, false);
         captureSentinels[GroupBg].Initialize(bg.NativeTex, false);
         captureSentinels[GroupBgDepth].Initialize(bg.NativeTex, true);
+        captureSentinels[GroupBgDepthInherit].Initialize(bg.NativeTex, true, inheritSeq: true);
+
+        // Beacon entries at the head of the list stay untouched.
+        int beaconEnd = 0;
+        while (beaconEnd < src.Length && src[beaconEnd].AddonHash == BeaconHash && src[beaconEnd].IsDepthPriority)
+            beaconEnd++;
+        if (CollectDiagnostics && beaconEnd > 0) Runs += $"\nBEACON x{beaconEnd}";
 
         var transitions = 0;
         var prevGroup = -1;
         var prevHash = 0;
-        for (int i = 0; i < src.Length; i++)
+        for (int i = beaconEnd; i < src.Length; i++)
         {
             int group = GetGroup(ref src[i]);
             bool boundary = group != prevGroup;
@@ -118,9 +127,11 @@ internal sealed unsafe class CaptureInjector : IDisposable
         var dst = new Span<UICommandEntry>(entriesBuffer, entriesCapacity);
 
         int j = 0;
-        dst[j++].Command = &captureSentinels[GroupBgDepth].Header;
+        for (int i = 0; i < beaconEnd; i++)
+            dst[j++] = src[i];
+        dst[j++].Command = &captureSentinels[beaconEnd > 0 ? GroupBgDepthInherit : GroupBgDepth].Header;
         prevGroup = GroupBgDepth;
-        for (int i = 0; i < src.Length; i++)
+        for (int i = beaconEnd; i < src.Length; i++)
         {
             int group = GetGroup(ref src[i]);
             if (group != prevGroup)

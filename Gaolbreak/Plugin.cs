@@ -38,6 +38,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly ConfigWindow configWindow;
     private readonly DynamicConfig remoteConfig;
     private readonly Config config;
+    private readonly RestBeaconAddon beacon;
 
     public Plugin()
     {
@@ -51,6 +52,7 @@ public sealed class Plugin : IDalamudPlugin
         fgOverlay = new UIOverlayWindow($"###{name}ForegroundOverlay", config, addonLayer, capturer.DrawFgTexture, Hooker, windowManager);
         bgOverlay = new OverlayWindow($"###{name}BackgroundOverlay", capturer.DrawBgTexture);
         indicator = new IndicatorWindow($"###{name}Indicator", config, capturer, OpenConfig);
+        beacon = new RestBeaconAddon();
         configWindow = new ConfigWindow($"{name}##Config", config, capturer, fgOverlay, bgOverlay, addonLayer, windowManager);
         windowSystem.AddWindow(configWindow);
         windowManager.InitOverlays(fgOverlay, bgOverlay, indicator);
@@ -90,6 +92,7 @@ public sealed class Plugin : IDalamudPlugin
         Framework.Update -= Update;
         CommandManager.RemoveHandler(CommandName);
 
+        beacon.Dispose();
         fgOverlay.Dispose();
         bgOverlay.Dispose();
         indicator.Dispose();
@@ -107,6 +110,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         capturer.Update();
         capturer.CollectDiagnostics = configWindow.IsOpen;
+        beacon.Open();
 
         if (config.Enable && capturer.CaptureActive && capturer.UiFresh)
             heartbeat.Tick();

@@ -24,7 +24,6 @@ A [Dalamud](https://github.com/goatcorp/Dalamud) plugin that breaks FFXIV's UI o
 ## Known issues
 * TintAdjust effects (Gamma and Color Filters) do not apply to Gaolbreak UI like it does the native UI.
 * Pieces of a few Addons that multiply the game's color (such as the duty actionbar) may appear darker.
-* Gaolbreak disables ReShade with REST - if using REST, you must disable the "UI" toggle group (open ReShade > Add-ons > List of Toggle Groups> UI)
 
 ## Support
 If you found a bug or have suggestions for the plugin, please do one of the following:

@@ -149,10 +149,18 @@ internal unsafe partial class Capturer : IDisposable
             if (isDepthPriority)
             {
                 var depth = sceneDepth != null ? sceneDepth : Rtm->DepthStencil;
-                var prevSortKey = currentCtx->SortKey;
-                currentCtx->SortKey = BeginDepthBandSortKey;
-                setRenderTargetsHook!.Original(currentCtx, 1, &target, depth, 0, 0, 0, 0);
-                currentCtx->SortKey = prevSortKey;
+                var inheritSeq = matrix != null && matrix[1] != 0f;
+                if (inheritSeq)
+                {
+                    setRenderTargetsHook!.Original(currentCtx, 1, &target, depth, 0, 0, 0, 0);
+                }
+                else
+                {
+                    var prevSortKey = currentCtx->SortKey;
+                    currentCtx->SortKey = BeginDepthBandSortKey;
+                    setRenderTargetsHook!.Original(currentCtx, 1, &target, depth, 0, 0, 0, 0);
+                    currentCtx->SortKey = prevSortKey;
+                }
             }
             else
             {
