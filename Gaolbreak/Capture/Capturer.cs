@@ -282,6 +282,7 @@ internal unsafe partial class Capturer : IDisposable
         if (BgCapture.MaybeBind(rt))
         {
             if (CollectDiagnostics) applySequenceCapture += "BG | ";
+            uiRedirectTick = Environment.TickCount64;
             return;
         }
     }

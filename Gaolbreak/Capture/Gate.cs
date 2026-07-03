@@ -9,8 +9,8 @@ internal static unsafe class Gate
     {
         try
         {
-            if (!Plugin.ClientState.IsLoggedIn) return "Not logged in";
-            if (Plugin.ObjectTable.LocalPlayer == null) return "No local player";
+            //if (!Plugin.ClientState.IsLoggedIn) return "Not logged in";
+            //if (Plugin.ObjectTable.LocalPlayer == null) return "No local player";
             if (IsZoning()) return "Zoning";
             if (Plugin.GameGui.GameUiHidden) return "UI hidden";
             if (IsInCutscene()) return "Cutscene";
@@ -37,5 +37,16 @@ internal static unsafe class Gate
         var fadeBlack = (AtkUnitBase*)Plugin.GameGui.GetAddonByName("FadeBlack").Address;
         return (fadeMiddle != null && fadeMiddle->IsVisible)
             || (fadeBlack != null && fadeBlack->IsVisible);
+    }
+
+    public static bool IsTitleScreen()
+    {
+        return IsAddonVisible("Title") || IsAddonVisible("CharaSelect");
+    }
+
+    private static bool IsAddonVisible(string addonName)
+    {
+        var addon = (AtkUnitBase*)Plugin.GameGui.GetAddonByName(addonName).Address;
+        return addon != null && addon->IsVisible;
     }
 }

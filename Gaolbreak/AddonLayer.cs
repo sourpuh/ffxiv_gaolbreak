@@ -4,12 +4,14 @@ using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using Gaolbreak.Capture;
 
 namespace Gaolbreak;
 
 internal unsafe class AddonLayer(Config config, IGameGui gameGui, ICondition condition)
 {
     private const uint MaxBackgroundDepthLayerDefault = 3;
+    private const uint MaxBackgroundDepthLayerTitleScreen = 4;
     private const uint MaxBackgroundDepthLayerCharacterCreator = 1;
     // Pop-up Addons whose show events should be ignored.
     private static readonly HashSet<string> ShowIgnoreAddons =
@@ -25,12 +27,16 @@ internal unsafe class AddonLayer(Config config, IGameGui gameGui, ICondition con
         ];
     private static readonly string[] ContextAddons =
         ["ContextMenu", "ContextIconMenu", "AddonContextMenuTitle"];
+    // Addons that should not block clicks to ImGui windows.
+    // These should always render in BG (assuming they're only ever used for FG modals).
+    private static readonly HashSet<string> ClickPassThroughAddons = ["Filter", "FilterSystem"];
 
     public readonly HashSet<string> LiftedAddons = [];
     public event Action? OnForegroundAddonShown;
 
-    private uint MaxBackgroundDepthLayer => condition[ConditionFlag.CreatingCharacter]
-        ? MaxBackgroundDepthLayerCharacterCreator
+    private uint MaxBackgroundDepthLayer =>
+        condition[ConditionFlag.CreatingCharacter] ? MaxBackgroundDepthLayerCharacterCreator
+        : Gate.IsTitleScreen() ? MaxBackgroundDepthLayerTitleScreen
         : MaxBackgroundDepthLayerDefault;
 
     public void OnAddonPostShow(AddonEvent type, AddonArgs args)
@@ -110,6 +116,7 @@ internal unsafe class AddonLayer(Config config, IGameGui gameGui, ICondition con
         if (addon == null) return false;
         var name = addon->NameString;
         if (ShowIgnoreAddons.Contains(name)) return false;
+        if (ClickPassThroughAddons.Contains(addon->NameString)) return true;
         return config.IsAddonLiftable(name)
             ? !LiftedAddons.Contains(name)
             : addon->DepthLayer <= MaxBackgroundDepthLayer;
