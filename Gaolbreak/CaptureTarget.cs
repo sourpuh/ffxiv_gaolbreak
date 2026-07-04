@@ -28,6 +28,7 @@ internal sealed unsafe class CaptureTarget : IDisposable
     private int renderIndex;
     private int presentIndex;
     private int lastBoundIndex = -1;
+    private bool boundThisFrame;
 
     private uint width;
     private uint height;
@@ -50,6 +51,7 @@ internal sealed unsafe class CaptureTarget : IDisposable
 
     public void Invalidate()
     {
+        Volatile.Write(ref boundThisFrame, false);
         Volatile.Write(ref lastBoundIndex, -1);
         Volatile.Write(ref presentIndex, -1);
     }
@@ -76,8 +78,10 @@ internal sealed unsafe class CaptureTarget : IDisposable
     {
         if (sizeRef == null || sizeRef->D3D11Texture2D == null) return false;
         if (!SizeEquals(bufs[renderIndex].Native, sizeRef) && !Recreate(sizeRef)) return false;
+        if (!Volatile.Read(ref boundThisFrame)) Volatile.Write(ref presentIndex, -1);
         frameCounter++;
         renderIndex = frameCounter % BufferCount;
+        Volatile.Write(ref boundThisFrame, false);
         return true;
     }
 
@@ -85,6 +89,7 @@ internal sealed unsafe class CaptureTarget : IDisposable
     {
         var i = BufferIndex(t);
         if (i < 0) return false;
+        Volatile.Write(ref boundThisFrame, true);
         if (i == Volatile.Read(ref lastBoundIndex)) return true;
         if (bufs[i].Rtv != null)
         {
@@ -97,6 +102,7 @@ internal sealed unsafe class CaptureTarget : IDisposable
 
     public void EndFrame()
     {
+        if (!Volatile.Read(ref boundThisFrame)) return;
         int i = Volatile.Read(ref lastBoundIndex);
         if (i >= 0) Volatile.Write(ref presentIndex, i);
     }

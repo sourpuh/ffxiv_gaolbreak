@@ -19,14 +19,14 @@ public unsafe struct ClipMaskDrawCommand
     [FieldOffset(32)] public Matrix4x4 Transform;
 
     // Init a sentinel that redirects to a capture target via Capturer.ClipMaskDetour.
-    public void Initialize(Texture* target, bool depth, bool inheritSeq = false)
+    public void Initialize(Texture* target, bool depth, int offset = 0)
     {
         Header.Opcode = ClipMaskOpcode;
         Variant = VariantBeginEnd;
         Key = KeyBegin | (depth ? KeyDepth : 0);
         Target = target;
         Transform = Matrix4x4.Identity;
-        // Passes the inheritSeq flag to Capturer.ClipMaskDetour.
-        if (inheritSeq) Transform.M12 = 1f;
+        // Offset is only used for depth capture.
+        Transform.M12 = offset;
     }
 }

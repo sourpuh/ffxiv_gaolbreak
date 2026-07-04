@@ -5,7 +5,7 @@ namespace Gaolbreak.Capture;
 
 internal sealed unsafe class CaptureInjector : IDisposable
 {
-    private const int GroupFg = 0, GroupBg = 1, GroupBgDepth = 2, GroupBgDepthInherit = 3;
+    private const int GroupBeaconFront = 0, GroupBgDepth = 1, GroupBg = 2, GroupFg = 3;
     private const int SentinelCount = 4;
     private static readonly int BeaconHash = RestBeaconAddon.InternalName.GetHashCode();
 
@@ -81,20 +81,19 @@ internal sealed unsafe class CaptureInjector : IDisposable
 
     private static string GroupName(int group) => group switch
     {
-        GroupFg => "FG",
-        GroupBg => "BG",
         GroupBgDepth => "BG+D",
+        GroupBg => "BG",
+        GroupFg => "FG",
         _ => $"Unk{group}",
     };
 
     private void BuildBgList(Span<UICommandEntry> src, out UICommandEntry* newList, out uint newCount)
     {
-        captureSentinels[GroupFg].Initialize(fg.NativeTex, false);
+        captureSentinels[GroupBeaconFront].Initialize(bg.NativeTex, true, offset: 0);
+        captureSentinels[GroupBgDepth].Initialize(bg.NativeTex, true, offset: 1);
         captureSentinels[GroupBg].Initialize(bg.NativeTex, false);
-        captureSentinels[GroupBgDepth].Initialize(bg.NativeTex, true);
-        captureSentinels[GroupBgDepthInherit].Initialize(bg.NativeTex, true, inheritSeq: true);
+        captureSentinels[GroupFg].Initialize(fg.NativeTex, false);
 
-        // Beacon entries at the head of the list stay untouched.
         int beaconEnd = 0;
         while (beaconEnd < src.Length && src[beaconEnd].AddonHash == BeaconHash && src[beaconEnd].IsDepthPriority)
             beaconEnd++;
@@ -117,7 +116,7 @@ internal sealed unsafe class CaptureInjector : IDisposable
             }
         }
 
-        int outCount = src.Length + 1 + transitions;
+        int outCount = src.Length + 2 + transitions;
         if (entriesCapacity < outCount)
         {
             if (entriesBuffer != null) NativeMemory.Free(entriesBuffer);
@@ -127,9 +126,10 @@ internal sealed unsafe class CaptureInjector : IDisposable
         var dst = new Span<UICommandEntry>(entriesBuffer, entriesCapacity);
 
         int j = 0;
+        dst[j++].Command = &captureSentinels[GroupBeaconFront].Header;
         for (int i = 0; i < beaconEnd; i++)
             dst[j++] = src[i];
-        dst[j++].Command = &captureSentinels[beaconEnd > 0 ? GroupBgDepthInherit : GroupBgDepth].Header;
+        dst[j++].Command = &captureSentinels[GroupBgDepth].Header;
         prevGroup = GroupBgDepth;
         for (int i = beaconEnd; i < src.Length; i++)
         {

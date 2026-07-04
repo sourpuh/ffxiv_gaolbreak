@@ -37,7 +37,6 @@ internal unsafe partial class Capturer : IDisposable
         get => collectDiagnostics;
         set { collectDiagnostics = value; clipBg.CollectDiagnostics = value; }
     }
-    public string applySequenceCapture = "";
     public string queueSequenceCapture = "";
     public string sceneDepthCapture = "";
 
@@ -140,6 +139,7 @@ internal unsafe partial class Capturer : IDisposable
 
 
     private const uint BeginDepthBandSortKey = 0xCE00_0000;
+    private uint savedFrontSortKey;
 
     private void ClipMaskDetour(long drawState, byte begin, Texture* target, float* matrix, byte emitMask)
     {
@@ -149,17 +149,19 @@ internal unsafe partial class Capturer : IDisposable
             if (isDepthPriority)
             {
                 var depth = sceneDepth != null ? sceneDepth : Rtm->DepthStencil;
-                var inheritSeq = matrix != null && matrix[1] != 0f;
-                if (inheritSeq)
+                int offset = matrix != null ? (int)matrix[1] : 0;
+                if (offset == 0)
                 {
-                    setRenderTargetsHook!.Original(currentCtx, 1, &target, depth, 0, 0, 0, 0);
+                    // Beacon front marker
+                    savedFrontSortKey = currentCtx->SortKey;
+                    currentCtx->SortKey = BeginDepthBandSortKey;
                 }
                 else
                 {
-                    var prevSortKey = currentCtx->SortKey;
-                    currentCtx->SortKey = BeginDepthBandSortKey;
+                    // Nameplate
+                    currentCtx->SortKey = BeginDepthBandSortKey + (uint)offset;
                     setRenderTargetsHook!.Original(currentCtx, 1, &target, depth, 0, 0, 0, 0);
-                    currentCtx->SortKey = prevSortKey;
+                    currentCtx->SortKey = savedFrontSortKey;
                 }
             }
             else
@@ -244,12 +246,10 @@ internal unsafe partial class Capturer : IDisposable
 
         try
         {
-            steps.Add(new("Logged in", Plugin.ClientState.IsLoggedIn));
-            steps.Add(new("Local player present", Plugin.ObjectTable.LocalPlayer != null));
-            steps.Add(new("Not zoning", !Gate.IsZoning()));
             steps.Add(new("Game UI not hidden", !Plugin.GameGui.GameUiHidden));
             steps.Add(new("Not in a cutscene", !Gate.IsInCutscene()));
-            steps.Add(new("Not faded to black", !Gate.IsFaded()));
+            steps.Add(new("Not faded", !Gate.IsFaded()));
+            steps.Add(new("Not transition", !Gate.IsTransition()));
         }
         catch (Exception e)
         {
@@ -258,12 +258,10 @@ internal unsafe partial class Capturer : IDisposable
 
         steps.Add(new("UI fresh (redirecting now)", UiFresh, UiFresh ? null : $"last redirect > {StaleMs}ms ago"));
 
-        steps.Add(new("apply sequence", true, applySequenceCapture));
         steps.Add(new("queue sequence", true, queueSequenceCapture));
         steps.Add(new("scene depth capture", true, sceneDepthCapture));
         steps.Add(new("fg/bg runs", true, clipBg.Runs));
         queueSequenceCapture = "";
-        applySequenceCapture = "";
 
         return steps;
     }
@@ -275,13 +273,11 @@ internal unsafe partial class Capturer : IDisposable
         var rt = command->RenderTarget0;
         if (FgCapture.MaybeBind(rt))
         {
-            if (CollectDiagnostics) applySequenceCapture += "FG | ";
             uiRedirectTick = Environment.TickCount64;
             return;
         }
         if (BgCapture.MaybeBind(rt))
         {
-            if (CollectDiagnostics) applySequenceCapture += "BG | ";
             uiRedirectTick = Environment.TickCount64;
             return;
         }
