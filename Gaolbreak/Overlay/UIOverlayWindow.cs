@@ -78,10 +78,14 @@ internal unsafe class UIOverlayWindow : OverlayWindow
             if (pressOwner is PressOwner.Window)
             {
                 OnWindowLmbDown?.Invoke(hovered.GetName());
+                var stage = AtkStage.Instance();
+                if (stage != null && stage->AtkInputManager != null && stage->AtkInputManager->TextInput != null)
+                    stage->ClearFocus();
             }
             if (pressOwner is PressOwner.Game && intersecting != null)
             {
                 OnAddonLmbDown?.Invoke(intersecting->NameString);
+                ImGui.SetWindowFocus(default);
             }
 
             lastClickAddon = intersecting != null ? intersecting->NameString : "—";
