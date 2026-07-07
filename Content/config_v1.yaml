@@ -30,6 +30,8 @@ defaultPins:
   RecipeNote:
     - 0x64EFA525 # Artisan
     - 0x2268D9F6 # Artisan
+  CollectablesShop:
+    - 0xAFCD7E2F # Pandora
 
 # Game addons that can be lifted to the FG.
 liftableAddons:
