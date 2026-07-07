@@ -2,7 +2,6 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.System.Memory;
 using FFXIVClientStructs.FFXIV.Client.System.String;
-using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.Interop;
 
@@ -18,8 +17,6 @@ internal sealed unsafe class RestBeaconAddon : IDisposable
 
     private AtkUnitBase* addon;
 
-    private static bool Available => RaptureAtkUnitManager.Addresses.InitializeAddon.Value != 0;
-
     public RestBeaconAddon()
     {
         Plugin.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, InternalName, OnPreFinalize);
@@ -30,7 +27,7 @@ internal sealed unsafe class RestBeaconAddon : IDisposable
     // Called every framework tick: reopens after the game tears the addon down.
     public void Open()
     {
-        if (addon != null || !Available) return;
+        if (addon != null) return;
         var stage = AtkStage.Instance();
         if (stage == null || stage->RaptureAtkUnitManager == null) return;
 
@@ -50,6 +47,10 @@ internal sealed unsafe class RestBeaconAddon : IDisposable
         addon->UldManager.InitializeResourceRendererManager();
         addon->UldManager.ResourceFlags |= AtkUldManagerResourceFlag.Initialized;
         BuildNodes(addon);
+
+        // These bits gate various game functions from adjusting visibility.
+        addon->Flags1B4 |= 0x00E00000;
+        addon->DisableCloseOnLoadScreen = true;
 
         addon->Open(depthLayer: 0);
     }
