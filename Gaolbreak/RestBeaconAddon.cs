@@ -20,9 +20,15 @@ internal sealed unsafe class RestBeaconAddon : IDisposable
     public RestBeaconAddon()
     {
         Plugin.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, InternalName, OnPreFinalize);
+        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostHide, InternalName, OnPostHide);
     }
 
     private void OnPreFinalize(AddonEvent type, AddonArgs args) => addon = null;
+
+    private void OnPostHide(AddonEvent type, AddonArgs args)
+    {
+        if (addon != null && !addon->IsVisible) addon->Open(depthLayer: 0);
+    }
 
     // Called every framework tick: reopens after the game tears the addon down.
     public void Open()
@@ -57,8 +63,9 @@ internal sealed unsafe class RestBeaconAddon : IDisposable
 
     public void Dispose()
     {
-        if (addon != null) addon->Close(false);
         Plugin.AddonLifecycle.UnregisterListener(OnPreFinalize);
+        Plugin.AddonLifecycle.UnregisterListener(OnPostHide);
+        if (addon != null) addon->Close(false);
     }
 
     private static void BuildNodes(AtkUnitBase* self)
