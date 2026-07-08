@@ -8,6 +8,7 @@ foregroundWindowIds:
 # ImGui window name prefixes that should stay in the FG.
 foregroundWindowPrefixes:
   - "##NotifyMainWindow"
+  - "##selectstring"
 
 # Game addon -> ImGui window IDs.
 defaultPins:
@@ -25,6 +26,7 @@ defaultPins:
   RetainerSellList:
     - 0x2E5F7C41 # Allagan Market
     - 0xF3A990BA # MarketBuddy
+    - 0xDD23A42E # Daily Routines
   RetainerSell:
     - 0x4C909AC4 # Allagan Market
   RecipeNote:
