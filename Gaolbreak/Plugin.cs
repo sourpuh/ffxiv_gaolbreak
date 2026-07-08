@@ -1,4 +1,3 @@
-using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
@@ -141,7 +140,6 @@ public sealed class Plugin : IDalamudPlugin
                 {
                     liftFgOverlay = false;
                     fgOverlay.BringToFront();
-                    ImGui.SetWindowFocus(default);
                 }
             }
 
