@@ -41,15 +41,15 @@ internal sealed unsafe class CaptureInjector : IDisposable
         if (!config.Enable || fg.IsNull || bg.IsNull) return;
 
         var list = self->UICommandListPtr;
-        var count = self->UICommandCount;
+        var count = self->UICommandCnt;
         if (list == null || count == 0 || count > self->UICommandPoolSize) return;
 
-        BuildBgList(self->UICommandList, out var newList, out var newCount);
+        BuildBgList(self->UICommandListSpan, out var newList, out var newCount);
 
         prevList = list;
         prevCount = count;
         self->UICommandListPtr = newList;
-        self->UICommandCount = newCount;
+        self->UICommandCnt = newCount;
         active = true;
     }
 
@@ -57,7 +57,7 @@ internal sealed unsafe class CaptureInjector : IDisposable
     {
         if (!active) return;
         self->UICommandListPtr = prevList;
-        self->UICommandCount = prevCount;
+        self->UICommandCnt = prevCount;
         active = false;
     }
 

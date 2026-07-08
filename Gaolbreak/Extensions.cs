@@ -5,7 +5,6 @@ using Gaolbreak.Capture;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Text;
-using TerraFX.Interop.Windows;
 
 namespace Gaolbreak;
 
@@ -75,12 +74,12 @@ internal static class Extensions
             get => *(UICommandEntry**)((byte*)Unsafe.AsPointer(ref s) + UICommandListOffset);
             set => *(UICommandEntry**)((byte*)Unsafe.AsPointer(ref s) + UICommandListOffset) = value;
         }
-        public unsafe uint UICommandCount
+        public unsafe uint UICommandCnt
         {
             get => *(uint*)((byte*)Unsafe.AsPointer(ref s) + UICommandCountOffset);
             set => *(uint*)((byte*)Unsafe.AsPointer(ref s) + UICommandCountOffset) = value;
         }
-        public unsafe Span<UICommandEntry> UICommandList => new Span<UICommandEntry>(s.UICommandListPtr, (int)s.UICommandCount);
+        public unsafe Span<UICommandEntry> UICommandListSpan => new Span<UICommandEntry>(s.UICommandListPtr, (int)s.UICommandCnt);
         public unsafe uint UICommandPoolSize
             => *(uint*)((byte*)Unsafe.AsPointer(ref s) + UICommandPoolSizeOffset) / (uint)sizeof(UICommandEntry);
     }
