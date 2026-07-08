@@ -1,6 +1,5 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin.Services;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 using Gaolbreak.Capture;
 using TerraFX.Interop.DirectX;
 using AtkServer = FFXIVClientStructs.FFXIV.Component.GUI.AtkServer;
@@ -133,7 +132,7 @@ internal unsafe partial class Capturer : IDisposable
     {
         var result = commitCommandHook!.Original(drawState, record, seq);
         long cursor = drawState[DrawStateCursorIndex];
-        var entry = (AtkUICommandEntry*)cursor - 1;
+        var entry = (UICommandEntry*)cursor - 1;
         entry->AddonHash = addonLayer.CurrentHash;
         return result;
     }
