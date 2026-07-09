@@ -57,6 +57,8 @@ internal sealed unsafe class RestBeaconAddon : IDisposable
         // These bits gate various game functions from adjusting visibility.
         addon->Flags1B4 |= 0x00E00000;
         addon->DisableCloseOnLoadScreen = true;
+        addon->DisableFocusability = true;
+        addon->DisableFocusOnShow = true;
 
         addon->Open(depthLayer: 0);
     }
