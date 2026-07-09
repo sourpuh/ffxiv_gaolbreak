@@ -34,6 +34,8 @@ defaultPins:
     - 0x2268D9F6 # Artisan
   CollectablesShop:
     - 0xAFCD7E2F # Pandora
+  LookingForGroupDetail:
+    - 0x3ADB2436 # Passport Checker Reborn
 
 # Game addons that can be lifted to the FG.
 liftableAddons:
