@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
     <PropertyGroup>
-        <Version>0.0.0.29</Version>
+        <Version>0.0.0.30</Version>
         <Description>Gaolbreak</Description>
         <PackageProjectUrl>https://github.com/sourpuh/ffxiv_gaolbreak</PackageProjectUrl>
         <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
