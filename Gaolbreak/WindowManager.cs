@@ -16,14 +16,12 @@ internal unsafe class WindowManager(Config config)
 
     private OverlayWindow fgOverlay = null!;
     private OverlayWindow bgOverlay = null!;
-    private OverlayWindow indicator = null!;
     private ImGuiWindowPtr lastFocusedWindow;
 
-    public void InitOverlays(OverlayWindow fgOverlay, OverlayWindow bgOverlay, OverlayWindow indicator)
+    public void InitOverlays(OverlayWindow fgOverlay, OverlayWindow bgOverlay)
     {
         this.fgOverlay = fgOverlay;
         this.bgOverlay = bgOverlay;
-        this.indicator = indicator;
     }
 
     public void Update()

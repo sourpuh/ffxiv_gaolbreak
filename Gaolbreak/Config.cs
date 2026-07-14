@@ -8,13 +8,13 @@ namespace Gaolbreak;
 internal sealed class Config
 {
     private readonly IDalamudPluginInterface pluginInterface;
-    private readonly DynamicConfig remote;
+    private readonly DynamicConfig dynamicCfg;
     private readonly Data data;
 
     public Config(IDalamudPluginInterface pluginInterface, DynamicConfig remote)
     {
         this.pluginInterface = pluginInterface;
-        this.remote = remote;
+        this.dynamicCfg = remote;
         Data? loaded = null;
         try
         {
@@ -79,10 +79,10 @@ internal sealed class Config
 
     public bool IsAlwaysLifted(ImGuiWindowPtr w)
     {
-        var rc = remote.Current;
-        if (rc.ForegroundWindowIds.Contains(w.ID)) return true;
+        var cfg = dynamicCfg.Current;
+        if (cfg.ForegroundWindowIds.Contains(w.ID)) return true;
         var name = w.GetName();
-        foreach (var prefix in rc.ForegroundWindowPrefixes)
+        foreach (var prefix in cfg.ForegroundWindowPrefixes)
             if (name.StartsWith(prefix, StringComparison.Ordinal)) return true;
         return false;
     }
@@ -119,16 +119,7 @@ internal sealed class Config
         return set;
     }
 
-    private IReadOnlyDictionary<string, IReadOnlySet<uint>> DefaultPins => remote.Current.DefaultPins;
+    private IReadOnlyDictionary<string, IReadOnlySet<uint>> DefaultPins => dynamicCfg.Current.DefaultPins;
 
-    public IEnumerable<uint> GetPinnedWindows(string addon)
-    {
-        if (DefaultPins.TryGetValue(addon, out var pins))
-        {
-            foreach (var w in pins)
-            {
-                yield return w;
-            }
-        }
-    }
+    public IEnumerable<uint> GetPinnedWindows(string addon) => DefaultPins.TryGetValue(addon, out var pins) ? pins : [];
 }

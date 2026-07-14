@@ -1,6 +1,5 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin.Services;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 using Gaolbreak.Capture;
 using System.Numerics;
 using TerraFX.Interop.DirectX;
@@ -40,8 +39,8 @@ internal unsafe partial class Capturer : IDisposable
         get => collectDiagnostics;
         set { collectDiagnostics = value; clipBg.CollectDiagnostics = value; }
     }
-    public string queueSequenceCapture = "";
-    public string sceneDepthCapture = "";
+    private string queueSequenceCapture = "";
+    private string sceneDepthCapture = "";
 
     private long uiRedirectTick;
     private const long StaleMs = 1000;

@@ -39,7 +39,6 @@ internal sealed class ConfigWindow : Window
 
     public override void Draw()
     {
-        var self = ImGui.GetCurrentContext().CurrentWindow;
         bool enable = config.Enable;
         if (ImGui.Checkbox("Enable", ref enable))
             config.Enable = enable;
@@ -63,7 +62,7 @@ internal sealed class ConfigWindow : Window
 
         if (ImGui.BeginTabItem("Windows"))
         {
-            DrawWindowsTab(self);
+            DrawWindowsTab();
             ImGui.EndTabItem();
         }
 
@@ -182,7 +181,7 @@ internal sealed class ConfigWindow : Window
         return color.ToUint();
     }
 
-    private void DrawWindowsTab(ImGuiWindowPtr self)
+    private void DrawWindowsTab()
     {
         ImGui.Checkbox("Filter windows", ref filterWindows);
         ImGui.SameLine();
@@ -206,7 +205,6 @@ internal sealed class ConfigWindow : Window
         ImGui.TableSetupColumn("Size", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize);
         ImGui.TableHeadersRow();
 
-        // Draw this window first to prevent reordering when clicking into the window
         var rows = windowManager.GetVisibleWindows(filterWindows);
         foreach (var row in rows)
         {

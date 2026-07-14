@@ -28,14 +28,6 @@ internal static class Extensions
         }
     }
 
-    extension(IDictionary<uint, string> d)
-    {
-        public string DebugString()
-        {
-            return string.Join(", ", d.Select(kvp => $"{kvp.Key}={kvp.Value}"));
-        }
-    }
-
     extension(ref Context c)
     {
         public unsafe uint SortKeyGB

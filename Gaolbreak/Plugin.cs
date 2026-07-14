@@ -55,7 +55,7 @@ public sealed class Plugin : IDalamudPlugin
         beacon = new RestBeaconAddon();
         configWindow = new ConfigWindow($"{name}##Config", config, capturer, fgOverlay, bgOverlay, addonLayer, windowManager);
         windowSystem.AddWindow(configWindow);
-        windowManager.InitOverlays(fgOverlay, bgOverlay, indicator);
+        windowManager.InitOverlays(fgOverlay, bgOverlay);
 
         PluginInterface.UiBuilder.DisableAutomaticUiHide = true;
         PluginInterface.UiBuilder.Draw += OnDraw;

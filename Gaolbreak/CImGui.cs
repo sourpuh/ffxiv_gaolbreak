@@ -17,8 +17,4 @@ public unsafe partial class CImGui
     [LibraryImport("cimgui")]
     [UnmanagedCallConv(CallConvs = new Type[] { typeof(CallConvCdecl) })]
     public static partial void igBringWindowToDisplayBehind(ImGuiWindow* window, ImGuiWindow* above_window);
-
-    [LibraryImport("cimgui")]
-    [UnmanagedCallConv(CallConvs = new Type[] { typeof(CallConvCdecl) })]
-    public static partial ImGuiWindow* igGetCurrentWindow();
 }

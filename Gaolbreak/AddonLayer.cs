@@ -88,7 +88,7 @@ internal unsafe class AddonLayer(Config config, IGameGui gameGui, ICondition con
         if (addon == null) return false;
         var name = addon->NameString;
         if (ShowIgnoreAddons.Contains(name)) return false;
-        if (ClickPassThroughAddons.Contains(addon->NameString)) return true;
+        if (ClickPassThroughAddons.Contains(name)) return true;
         return config.IsAddonLiftable(name)
             ? !LiftedAddons.Contains(name)
             : addon->DepthLayer <= MaxBackgroundDepthLayer;

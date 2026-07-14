@@ -58,7 +58,7 @@ internal unsafe class UIOverlayWindow : OverlayWindow
         bool bgAddonHovered = addonLayer.IsBackground(intersecting);
         if (bgAddonHovered && !windowHovered)
         {
-            ImGuiWindowPtr behind = windowManager.WindowAt(ImGui.GetMousePos(), overlay);
+            ImGuiWindowPtr behind = windowManager.WindowAt(mouse, overlay);
             if (!behind.IsNull)
             {
                 hovered = behind;

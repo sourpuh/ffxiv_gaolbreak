@@ -27,8 +27,6 @@ internal sealed class DynamicConfig : IDisposable
     private volatile DynamicConfigData current;
     private bool disposed;
 
-    public event Action? OnUpdated;
-
     public DynamicConfigData Current => current;
 
     public DynamicConfig(IDalamudPluginInterface plugin)
@@ -40,7 +38,8 @@ internal sealed class DynamicConfig : IDisposable
     private async Task LoadAsync()
     {
         var remote = await TryLoadGitHubAsync();
-        Publish(remote);
+        if (disposed) return;
+        current = remote;
     }
 
     private async Task<DynamicConfigData> TryLoadGitHubAsync()
@@ -54,13 +53,6 @@ internal sealed class DynamicConfig : IDisposable
         var raw = await resp.Content.ReadAsStringAsync(cts.Token);
         var data = Parse(raw);
         return data;
-    }
-
-    private void Publish(DynamicConfigData data)
-    {
-        if (disposed) return;
-        current = data;
-        _ = Plugin.Framework.RunOnFrameworkThread(() => { if (!disposed) OnUpdated?.Invoke(); });
     }
 
     public void Dispose()
@@ -93,8 +85,7 @@ internal sealed class DynamicConfig : IDisposable
     private static string ReadEmbeddedDefault(IDalamudPluginInterface plugin)
     {
         var path = Path.Combine(plugin.AssemblyLocation.Directory?.FullName!, ConfigName);
-        using var reader = new StreamReader(path);
-        return reader.ReadToEnd();
+        return File.ReadAllText(path);
 
     }
 }
