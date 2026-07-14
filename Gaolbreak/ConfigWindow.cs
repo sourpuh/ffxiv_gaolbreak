@@ -3,6 +3,7 @@ using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using Gaolbreak.Capture;
 using Gaolbreak.Overlay;
 using System.Numerics;
 
@@ -12,7 +13,7 @@ internal sealed class ConfigWindow : Window
 {
     private const string NullAddonName = "(none)";
     private readonly Config config;
-    private readonly Capturer capture;
+    private readonly Capturer capturer;
     private readonly UIOverlayWindow fgOverlay;
     private readonly OverlayWindow bgOverlay;
     private readonly AddonLayer addonLayer;
@@ -20,12 +21,13 @@ internal sealed class ConfigWindow : Window
 
     private bool filterWindows = true;
     private bool filterAddonsVisible = true;
+    private Vector4 captureBackdrop = Vector4.Zero;
 
-    public ConfigWindow(string name, Config config, Capturer capture, UIOverlayWindow fgOverlay, OverlayWindow bgOverlay, AddonLayer addonLayer, WindowManager windowManager)
+    public ConfigWindow(string name, Config config, Capturer capturer, UIOverlayWindow fgOverlay, OverlayWindow bgOverlay, AddonLayer addonLayer, WindowManager windowManager)
         : base(name)
     {
         this.config = config;
-        this.capture = capture;
+        this.capturer = capturer;
         this.fgOverlay = fgOverlay;
         this.bgOverlay = bgOverlay;
         this.addonLayer = addonLayer;
@@ -49,6 +51,13 @@ internal sealed class ConfigWindow : Window
         bool indicator = config.EnableIndicator;
         if (ImGui.Checkbox("Indicator", ref indicator))
             config.EnableIndicator = indicator;
+        ImGui.SameLine();
+        bool toneAdjust = config.EnableToneAdjust;
+        if (ImGui.Checkbox("Tone Adjust", ref toneAdjust))
+            config.EnableToneAdjust = toneAdjust;
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Apply gamma and color filter to the capture.");
+
 
         if (!ImGui.BeginTabBar("##gaolbreak_tabs")) return;
 
@@ -78,7 +87,6 @@ internal sealed class ConfigWindow : Window
         const ImGuiTableFlags flags =
             ImGuiTableFlags.Borders |
             ImGuiTableFlags.RowBg |
-            ImGuiTableFlags.Resizable |
             ImGuiTableFlags.SizingStretchSame;
 
         if (!ImGui.BeginTable("##capture_list", 2, flags)) return;
@@ -89,19 +97,20 @@ internal sealed class ConfigWindow : Window
 
         ImGui.TableNextRow();
 
-        //ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, 0xFFFFFFFF);
+        ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, captureBackdrop.ToUint());
         ImGui.TableNextColumn();
-        DrawCapturePane(capture.BgCapture);
-
+        DrawCapturePane(capturer.BgCapture);
         ImGui.TableNextColumn();
-        DrawCapturePane(capture.FgCapture);
+        DrawCapturePane(capturer.FgCapture);
 
         ImGui.EndTable();
+        ImGui.ColorEdit4("Backdrop", ref captureBackdrop, ImGuiColorEditFlags.NoInputs | ImGuiColorEditFlags.AlphaBar | ImGuiColorEditFlags.AlphaPreviewHalf);
+
         DrawCaptureDiagnostics();
         DrawMouseDiagnostics();
     }
 
-    private static void DrawCapturePane(CaptureTarget capture)
+    private void DrawCapturePane(CaptureTarget capture)
     {
         ImGui.TextUnformatted($"{capture.Width}x{capture.Height}");
 
@@ -112,7 +121,9 @@ internal sealed class ConfigWindow : Window
         else
         {
             float paneWidth = ImGui.GetContentRegionAvail().X;
-            ImGui.Image((ImTextureID)(ulong)capture.PresentHandle, new Vector2(paneWidth, paneWidth * capture.Aspect));
+            var size = new Vector2(paneWidth, paneWidth * capture.Aspect);
+            this.capturer.DrawTexture(ImGui.GetWindowDrawList(), capture, ImGui.GetCursorScreenPos(), size);
+            ImGui.Dummy(size);
         }
     }
 
@@ -123,7 +134,7 @@ internal sealed class ConfigWindow : Window
         var green = new Vector4(0.30f, 0.85f, 0.30f, 1f);
         var red = new Vector4(0.90f, 0.35f, 0.35f, 1f);
         int row = 0;
-        foreach (var step in capture.Diagnostics())
+        foreach (var step in capturer.Diagnostics())
         {
             row++;
             ImGui.TextColored(step.Ok ? green : red, step.Ok ? "[ok]" : "[xx]");

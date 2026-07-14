@@ -1,6 +1,8 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Gaolbreak.Capture;
+using System.Numerics;
 using TerraFX.Interop.DirectX;
 using AtkServer = FFXIVClientStructs.FFXIV.Component.GUI.AtkServer;
 using Context = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Context;
@@ -19,6 +21,7 @@ internal unsafe partial class Capturer : IDisposable
     private readonly AddonLayer addonLayer;
     private readonly ID3D11DeviceContext* context;
     private readonly Renderer renderer;
+    private readonly ToneAdjustPass toneAdjust;
 
     public readonly CaptureTarget FgCapture;
     public readonly CaptureTarget BgCapture;
@@ -47,6 +50,9 @@ internal unsafe partial class Capturer : IDisposable
     public bool CaptureActive => captureActive;
     public readonly bool HooksBroken;
 
+    private readonly Lock renderDisposeLock = new();
+    private volatile bool disposing;
+
     private static RenderTargetManager* Rtm => RenderTargetManager.Instance();
 
     private string Describe(Texture* t)
@@ -67,21 +73,25 @@ internal unsafe partial class Capturer : IDisposable
         ID3D11DeviceContext* context;
         device->GetImmediateContext(&context);
         this.context = context;
-        FgCapture = new(device, context);
-        BgCapture = new(device, context);
+        FgCapture = new(context);
+        BgCapture = new(context);
         clipBg = new CaptureInjector(config, addonLayer, FgCapture, BgCapture);
         renderer = new Renderer(device, context);
+        toneAdjust = new ToneAdjustPass(device);
         HooksBroken = TryInstallHooks(hooker);
     }
 
     public void Dispose()
     {
+        disposing = true;
+        lock (renderDisposeLock) { }
         DisposeHooks();
 
         clipBg.Dispose();
         FgCapture.Dispose();
         BgCapture.Dispose();
         renderer.Dispose();
+        toneAdjust.Dispose();
         if (context != null) context->Release();
     }
 
@@ -93,6 +103,11 @@ internal unsafe partial class Capturer : IDisposable
     public void DrawBgTexture(ImDrawListPtr drawlist)
     {
         renderer.DrawTextureToDrawlist(drawlist, BgCapture.PresentHandle);
+    }
+
+    public void DrawTexture(ImDrawListPtr drawlist, CaptureTarget target, Vector2 pos, Vector2 size)
+    {
+        renderer.DrawTextureToDrawlist(drawlist, target.PresentHandle, pos, size);
     }
 
     private void AtkServerDrawDetour(AtkServer* self, bool a2)
@@ -132,7 +147,7 @@ internal unsafe partial class Capturer : IDisposable
     {
         var result = commitCommandHook!.Original(drawState, record, seq);
         long cursor = drawState[DrawStateCursorIndex];
-        var entry = (UICommandEntry*)cursor - 1;
+        var entry = (AtkUICommandEntryGB*)cursor - 1;
         entry->AddonHash = addonLayer.CurrentHash;
         return result;
     }
@@ -153,15 +168,15 @@ internal unsafe partial class Capturer : IDisposable
                 if (offset == 0)
                 {
                     // Beacon front marker
-                    savedFrontSortKey = currentCtx->SortKey;
-                    currentCtx->SortKey = BeginDepthBandSortKey;
+                    savedFrontSortKey = currentCtx->SortKeyGB;
+                    currentCtx->SortKeyGB = BeginDepthBandSortKey;
                 }
                 else
                 {
                     // Nameplate
-                    currentCtx->SortKey = BeginDepthBandSortKey + (uint)offset;
+                    currentCtx->SortKeyGB = BeginDepthBandSortKey + (uint)offset;
                     setRenderTargetsHook!.Original(currentCtx, 1, &target, depth, 0, 0, 0, 0);
-                    currentCtx->SortKey = savedFrontSortKey;
+                    currentCtx->SortKeyGB = savedFrontSortKey;
                 }
             }
             else
@@ -192,7 +207,7 @@ internal unsafe partial class Capturer : IDisposable
         if (CollectDiagnostics && inAtkServerDraw && count >= 1 && renderTargets != null)
         {
             var kind = depthBuffer != null ? "BG" : "FG";
-            queueSequenceCapture += $"{kind}[{Describe(renderTargets[0])}]@{context->SubViewLayer:X2} | ";
+            queueSequenceCapture += $"{kind}[{Describe(renderTargets[0])}]@{context->SortKeyGB >> 24:X2} | ";
         }
         setRenderTargetsHook!.Original(context, count, renderTargets, depthBuffer, a5, a6, a7, a8);
     }
@@ -257,7 +272,6 @@ internal unsafe partial class Capturer : IDisposable
         }
 
         steps.Add(new("UI fresh (redirecting now)", UiFresh, UiFresh ? null : $"last redirect > {StaleMs}ms ago"));
-
         steps.Add(new("queue sequence", true, queueSequenceCapture));
         steps.Add(new("scene depth capture", true, sceneDepthCapture));
         steps.Add(new("fg/bg runs", true, clipBg.Runs));
@@ -270,7 +284,7 @@ internal unsafe partial class Capturer : IDisposable
     {
         applySetTargetHook!.Original(self, command);
 
-        var rt = command->RenderTarget0;
+        var rt = command->RenderTargets[0].Value;
         if (FgCapture.MaybeBind(rt))
         {
             uiRedirectTick = Environment.TickCount64;
@@ -286,8 +300,13 @@ internal unsafe partial class Capturer : IDisposable
     private void ProcessCommandsDetour(ImmediateContext* self, void* group, uint count)
     {
         processCommandsHook!.Original(self, group, count);
-        if (!config.Enable) return;
-        FgCapture.EndFrame();
-        BgCapture.EndFrame();
+        if (!config.Enable || disposing) return;
+        lock (renderDisposeLock)
+        {
+            if (disposing) return;
+            using var pass = config.EnableToneAdjust ? toneAdjust.Begin(context, Rtm->ToneAdjustSource) : default;
+            FgCapture.EndFrame(pass);
+            BgCapture.EndFrame(pass);
+        }
     }
 }

@@ -1,5 +1,6 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility;
+using System.Numerics;
 using TerraFX.Interop.DirectX;
 
 namespace Gaolbreak.Capture;
@@ -22,11 +23,11 @@ internal sealed unsafe class Renderer : IDisposable
     }
 
     public void DrawTextureToDrawlist(ImDrawListPtr drawList, nint textureHandle)
+        => DrawTextureToDrawlist(drawList, textureHandle, ImGuiHelpers.MainViewport.Pos, ImGuiHelpers.MainViewport.Size);
+
+    public void DrawTextureToDrawlist(ImDrawListPtr drawList, nint textureHandle, Vector2 pos, Vector2 size)
     {
         if (textureHandle == 0) return;
-        var pos = ImGuiHelpers.MainViewport.Pos;
-        var size = ImGuiHelpers.MainViewport.Size;
-
         drawList.AddCallback(premultBlendCallback, null);
         drawList.AddImage((ImTextureID)(ulong)textureHandle, pos, pos + size);
         drawList.AddCallback(straightBlendCallback, null);

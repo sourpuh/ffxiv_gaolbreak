@@ -43,36 +43,8 @@ internal unsafe class AddonLayer(Config config, IGameGui gameGui, ICondition con
     {
         var addon = (AtkUnitBase*)args.Addon.Address;
         if (addon == null) return;
-        HideCapturedFillBackdrops(&addon->UldManager);
         if (addon->DepthLayer > MaxBackgroundDepthLayer && !ShowIgnoreAddons.Contains(addon->NameString))
             OnForegroundAddonShown?.Invoke();
-    }
-
-    // The BRD job gauge backdrop is a Fill image node with no texture.
-    // It normally acts as an invisible alpha-only draw, but stamps a black rectangle in the capture so it needs hiding.
-    private static void HideCapturedFillBackdrops(AtkUldManager* uld)
-    {
-        if (uld == null) return;
-        for (var i = 0; i < uld->NodeListCount; i++)
-        {
-            var node = uld->NodeList[i];
-            if (node == null) continue;
-            if (node->Type == NodeType.Image && node->NodeFlags.HasFlag(NodeFlags.Fill)
-                && HasNullTexturePart(node->GetAsAtkImageNode()))
-                node->ToggleVisibility(false);
-            var component = node->GetComponent();
-            if (component != null)
-                HideCapturedFillBackdrops(&component->UldManager);
-        }
-    }
-
-    private static bool HasNullTexturePart(AtkImageNode* image)
-    {
-        if (image == null || image->PartsList == null) return false;
-        for (var i = 0; i < image->PartsList->PartCount; i++)
-            if (image->PartsList->Parts[i].UldAsset->AtkTexture.KernelTexture == null)
-                return true;
-        return false;
     }
 
     public void OnWindowLmbDown(string windowName)

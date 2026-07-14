@@ -38,22 +38,11 @@ internal static class Extensions
 
     extension(ref Context c)
     {
-        public unsafe byte SubViewLayer
-        {
-            get => *((byte*)Unsafe.AsPointer(ref c) + 11);
-            set => *((byte*)Unsafe.AsPointer(ref c) + 11) = value;
-        }
-
-        public unsafe uint SortKey
+        public unsafe uint SortKeyGB
         {
             get => *(uint*)((byte*)Unsafe.AsPointer(ref c) + 8);
             set => *(uint*)((byte*)Unsafe.AsPointer(ref c) + 8) = value;
         }
-    }
-
-    extension(RenderCommandSetTarget command)
-    {
-        public unsafe Texture* RenderTarget0 => command.RenderTargets[0].Value;
     }
 
     extension(ref Texture t)
@@ -69,27 +58,28 @@ internal static class Extensions
 
     extension(ref AtkServer s)
     {
-        public unsafe UICommandEntry* UICommandListPtr
+        public unsafe AtkUICommandEntryGB* UICommandListGB
         {
-            get => *(UICommandEntry**)((byte*)Unsafe.AsPointer(ref s) + UICommandListOffset);
-            set => *(UICommandEntry**)((byte*)Unsafe.AsPointer(ref s) + UICommandListOffset) = value;
+            get => *(AtkUICommandEntryGB**)((byte*)Unsafe.AsPointer(ref s) + UICommandListOffset);
+            set => *(AtkUICommandEntryGB**)((byte*)Unsafe.AsPointer(ref s) + UICommandListOffset) = value;
         }
-        public unsafe uint UICommandCnt
+        public unsafe uint UICommandCountGB
         {
             get => *(uint*)((byte*)Unsafe.AsPointer(ref s) + UICommandCountOffset);
             set => *(uint*)((byte*)Unsafe.AsPointer(ref s) + UICommandCountOffset) = value;
         }
-        public unsafe Span<UICommandEntry> UICommandListSpan => new Span<UICommandEntry>(s.UICommandListPtr, (int)s.UICommandCnt);
+
         public unsafe uint UICommandPoolSize
-            => *(uint*)((byte*)Unsafe.AsPointer(ref s) + UICommandPoolSizeOffset) / (uint)sizeof(UICommandEntry);
+            => *(uint*)((byte*)Unsafe.AsPointer(ref s) + UICommandPoolSizeOffset) / (uint)sizeof(AtkUICommandEntryGB);
     }
 
-    extension(ref UICommandEntry e)
+    extension(ref AtkUICommandEntryGB e)
     {
-        public int AddonHash
+        // The entry's +0x04 padding is unused by the game; Gaolbreak stamps it with the addon name hashcode.
+        public unsafe int AddonHash
         {
-            get => (int) e.Padding;
-            set => e.Padding = (uint) value;
+            get => *((int*)Unsafe.AsPointer(ref e) + 1);
+            set => *((int*)Unsafe.AsPointer(ref e) + 1) = value;
         }
 
         public unsafe bool IsDepthPriority
@@ -97,14 +87,32 @@ internal static class Extensions
             get
             {
                 var cmd = e.Command;
-                return cmd != null && cmd->IsGeometry && cmd->IsDepthPriority;
+                return cmd != null && cmd->IsDepthPriority;
             }
         }
     }
 
-    extension(ref UIDrawCommand c)
+    extension(ref AtkUICommandGB c)
     {
-        public bool IsGeometry => (c.Opcode & 0xF0) != 0;
-        public bool IsDepthPriority => (c.SortKey >> 8 & 0xF) == 1;
+        public bool IsDraw => (uint)c.Type > (uint)AtkUICommandTypeGB.ClipRect;
+        public unsafe bool IsDepthPriority
+            => c.IsDraw && (*(uint*)((byte*)Unsafe.AsPointer(ref c) + 0x30) >> 8 & 0xF) == 1;
+    }
+
+    private const uint ClipMaskFlagBegin = 1;
+    private const uint ClipMaskFlagDepth = 2;
+    extension (ref AtkUICommandClipMaskGB cmd)
+    {
+        // Init a sentinel that redirects to a capture target via Capturer.ClipMaskDetour.
+        public unsafe void InitSentinel(Texture* target, bool depth, int offset = 0)
+        {
+            cmd.Type = AtkUICommandTypeGB.ClipMask;
+            cmd.Format = AtkUICommandFormatGB.ClipMask;
+            cmd.Flags = ClipMaskFlagBegin | (depth ? ClipMaskFlagDepth : 0);
+            cmd.MaskTexture = target;
+            cmd.Transform = Matrix4x4.Identity;
+            // Offset is only used for depth capture.
+            cmd.Transform.M12 = offset;
+        }
     }
 }

@@ -34,6 +34,7 @@ internal sealed class Config
 
         public bool EnableReorder { get; set; } = true;
         public bool EnableIndicator { get; set; } = true;
+        public bool EnableToneAdjust { get; set; } = true;
     }
 
     private void Save()
@@ -61,6 +62,17 @@ internal sealed class Config
         {
             if (data.EnableIndicator == value) return;
             data.EnableIndicator = value;
+            Save();
+        }
+    }
+
+    public bool EnableToneAdjust
+    {
+        get => data.EnableToneAdjust;
+        set
+        {
+            if (data.EnableToneAdjust == value) return;
+            data.EnableToneAdjust = value;
             Save();
         }
     }

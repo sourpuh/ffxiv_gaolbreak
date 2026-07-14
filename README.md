@@ -35,8 +35,7 @@ Some plugins create ImGui windows that are intended to appear "attached" to nati
 As an example of what you need to provide, WaymarkPresetPlugin's window ID is `0x3E3947D9` and it attaches to the Addon named `FieldMarker`.
 
 ## Known issues
-* TintAdjust effects (Gamma and Color Filters) do not apply to Gaolbreak UI like it does the native UI.
-* Pieces of a few Addons that multiply the game's color (such as the duty actionbar) may appear darker.
+* None
 
 ## Support
 If you found a bug or have suggestions for the plugin, please do one of the following:
