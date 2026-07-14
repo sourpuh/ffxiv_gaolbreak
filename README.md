@@ -17,9 +17,22 @@ A [Dalamud](https://github.com/goatcorp/Dalamud) plugin that breaks FFXIV's UI o
   * Right click opens the plugin config
 <br clear="right"/>
 
-## Installation
-* Repository: https://puni.sh/api/repository/sourpuh
-* If you don't know how to use custom repositories, follow "Download" instructions on https://puni.sh/directory/sourpuh/gaolbreak
+## Pins
+Some plugins create ImGui windows that are intended to appear "attached" to native UI Addons, such as ImGui overlay buttons or attached side windows. Without Gaolbreak, these plugins will always draw on top of the native UI. With Gaolbreak, these can get lost underneath Addons or have confusing layering. If you report these plugins, they can be fixed; follow these steps:
+
+1. Open Gaolbreak's config UI.
+2. Go to the "Windows" tab.
+3. Identify the plugin window; when you click on it, it will appear at the top of the list.
+4. Note the window ID.
+5. Go to the "Addons" tab.
+6. Identify the addon window that the plugin window should be attached to.
+7. Note the Addon's name.
+8. Create a new GitHub issue or message me on Discord. Provide the following:
+    1. The window ID(s)
+    2. The Addon name(s)
+    3. Any other context that might be necessary, such as if the plugin doesn't attach to a specific window.
+
+As an example of what you need to provide, WaymarkPresetPlugin's window ID is `0x3E3947D9` and it attaches to the Addon named `FieldMarker`.
 
 ## Known issues
 * TintAdjust effects (Gamma and Color Filters) do not apply to Gaolbreak UI like it does the native UI.
@@ -30,7 +43,7 @@ If you found a bug or have suggestions for the plugin, please do one of the foll
 
 1. Check if a [GitHub issue](https://github.com/sourpuh/ffxiv_gaolbreak/issues) already exists for the same thing.
 1. Create a [new GitHub issue](https://github.com/sourpuh/ffxiv_gaolbreak/issues/new). Provide a detailed description of the suggestion or problem (For bugs, include logs or steps to reproduce the issue).
-1. Ask in [Puni.sh Discord](https://discord.gg/punishxiv): it might be a known issue or people might be able to help you quickly.
+1. Ask in Dalamud Discord: it might be a known issue or people might be able to help you quickly.
 
 ## About
 Gaolbreak's implementation uses the following primary components:

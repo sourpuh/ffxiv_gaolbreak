@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--DON'T FORGET TO UPDATE THE DYNAMIS VERSION TOO-->
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
     <PropertyGroup>
         <Version>0.0.0.29</Version>
-        <Description>Gaolbreak UI</Description>
+        <Description>Gaolbreak</Description>
         <PackageProjectUrl>https://github.com/sourpuh/ffxiv_gaolbreak</PackageProjectUrl>
         <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
         <IsPackable>false</IsPackable>

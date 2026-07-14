@@ -1,9 +1,9 @@
 {
-  "Name": "Gaolbreak UI",
+  "Name": "Gaolbreak",
   "InternalName": "Gaolbreak",
   "Author": "sourpuh",
   "Punchline": "Break your UI out of gaol.",
-  "Description": "Layers game windows with plugin windows, enables 3D overlay plugins to draw under UI, and stops ReShade affecting your UI.",
+  "Description": "Layer game windows with plugin windows, enable 3D overlay plugins to draw under UI, and stop ReShade affecting your UI.",
   "RepoUrl": "https://github.com/sourpuh/ffxiv_gaolbreak",
   "Tags": [
     "gaol", "jail", "break", "ui", "layer", "window", "reshade", "native", "imgui"
