@@ -12,6 +12,7 @@ internal unsafe class AddonLayer(Config config, IGameGui gameGui, ICondition con
 {
     private const uint MaxBackgroundDepthLayerDefault = 3;
     private const uint MaxBackgroundDepthLayerTitleScreen = 4;
+    private const uint MaxBackgroundDepthLayerDCSelector = 10;
     private const uint MaxBackgroundDepthLayerCharacterCreator = 1;
     // Pop-up Addons whose show events should be ignored.
     private static readonly HashSet<string> ShowIgnoreAddons =
@@ -36,7 +37,8 @@ internal unsafe class AddonLayer(Config config, IGameGui gameGui, ICondition con
 
     private uint MaxBackgroundDepthLayer =>
         condition[ConditionFlag.CreatingCharacter] ? MaxBackgroundDepthLayerCharacterCreator
-        : Gate.IsTitleScreen() ? MaxBackgroundDepthLayerTitleScreen
+        : Gate.IsDCSelection() ? MaxBackgroundDepthLayerDCSelector
+        : Gate.IsTitleScreen() && Gate.IsTitleMenu() ? MaxBackgroundDepthLayerTitleScreen
         : MaxBackgroundDepthLayerDefault;
 
     public void OnAddonPostShow(AddonEvent type, AddonArgs args)

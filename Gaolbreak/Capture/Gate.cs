@@ -43,6 +43,16 @@ internal static unsafe class Gate
         return env->FadeActive || env->FadeColor.W - env->FadeCurrent > 0.01f;
     }
 
+    public static bool IsDCSelection()
+    {
+        return IsAddonVisible("TitleDCWorldMap");
+    }
+
+    public static bool IsTitleMenu()
+    {
+        return IsAddonVisible("_TitleMenu");
+    }
+
     public static bool IsTitleScreen()
     {
         return IsAddonVisible("Title") || IsAddonVisible("CharaSelect");
