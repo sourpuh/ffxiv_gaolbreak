@@ -1,4 +1,5 @@
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using TerraFX.Interop.DirectX;
 
 namespace Gaolbreak.Capture;
@@ -19,11 +20,11 @@ internal static unsafe class AtkUICommandPatcher
         return blend->BlendOp == OpAdd && blend->DestBlend == BlendOne;
     }
 
-    internal static void MaybePatchAdditiveAlpha(ref AtkUICommandEntryGB e)
+    internal static void MaybePatchAdditiveAlpha(ref AtkUICommandEntry e)
     {
         var cmd = e.Command;
         if (cmd == null || !cmd->IsDraw) return;
-        var blend = &((AtkUICommandDrawGB*)cmd)->BlendState;
+        var blend = &((AtkUICommandDraw*)cmd)->BlendState;
         if ((blend->RenderTargetWriteMask & WriteMaskRgb) == 0)
         {
             blend->RenderTargetWriteMask = 0;

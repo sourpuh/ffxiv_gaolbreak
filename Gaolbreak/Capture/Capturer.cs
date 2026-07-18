@@ -1,5 +1,6 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Gaolbreak.Capture;
 using System.Numerics;
 using TerraFX.Interop.DirectX;
@@ -146,7 +147,7 @@ internal unsafe partial class Capturer : IDisposable
     {
         var result = commitCommandHook!.Original(drawState, record, seq);
         long cursor = drawState[DrawStateCursorIndex];
-        var entry = (AtkUICommandEntryGB*)cursor - 1;
+        var entry = (AtkUICommandEntry*)cursor - 1;
         entry->AddonHash = addonLayer.CurrentHash;
         return result;
     }
@@ -167,15 +168,15 @@ internal unsafe partial class Capturer : IDisposable
                 if (offset == 0)
                 {
                     // Beacon front marker
-                    savedFrontSortKey = currentCtx->SortKeyGB;
-                    currentCtx->SortKeyGB = BeginDepthBandSortKey;
+                    savedFrontSortKey = currentCtx->SortKey;
+                    currentCtx->SortKey = BeginDepthBandSortKey;
                 }
                 else
                 {
                     // Nameplate
-                    currentCtx->SortKeyGB = BeginDepthBandSortKey + (uint)offset;
+                    currentCtx->SortKey = BeginDepthBandSortKey + (uint)offset;
                     setRenderTargetsHook!.Original(currentCtx, 1, &target, depth, 0, 0, 0, 0);
-                    currentCtx->SortKeyGB = savedFrontSortKey;
+                    currentCtx->SortKey = savedFrontSortKey;
                 }
             }
             else
@@ -206,7 +207,7 @@ internal unsafe partial class Capturer : IDisposable
         if (CollectDiagnostics && inAtkServerDraw && count >= 1 && renderTargets != null)
         {
             var kind = depthBuffer != null ? "BG" : "FG";
-            queueSequenceCapture += $"{kind}[{Describe(renderTargets[0])}]@{context->SortKeyGB >> 24:X2} | ";
+            queueSequenceCapture += $"{kind}[{Describe(renderTargets[0])}]@{context->SortKey >> 24:X2} | ";
         }
         setRenderTargetsHook!.Original(context, count, renderTargets, depthBuffer, a5, a6, a7, a8);
     }
@@ -279,9 +280,9 @@ internal unsafe partial class Capturer : IDisposable
         return steps;
     }
 
-    private void ApplySetTargetCommandDetour(ImmediateContext* self, RenderCommandSetTarget* command)
+    private void DoSetTargetCommandDetour(ImmediateContext* self, RenderCommandSetTarget* command)
     {
-        applySetTargetHook!.Original(self, command);
+        doSetTargetHook!.Original(self, command);
 
         var rt = command->RenderTargets[0].Value;
         if (FgCapture.MaybeBind(rt))

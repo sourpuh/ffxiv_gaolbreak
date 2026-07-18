@@ -15,11 +15,11 @@ internal sealed unsafe class CaptureInjector : IDisposable
     private readonly CaptureTarget bg;
 
     private bool active;
-    private AtkUICommandClipMaskGB* captureSentinels;
-    private AtkUICommandEntryGB* entriesBuffer;
+    private AtkUICommandClipMask* captureSentinels;
+    private AtkUICommandEntry* entriesBuffer;
     private int entriesCapacity;
 
-    private AtkUICommandEntryGB* prevList;
+    private AtkUICommandEntry* prevList;
     private uint prevCount;
 
     public bool CollectDiagnostics;
@@ -31,7 +31,7 @@ internal sealed unsafe class CaptureInjector : IDisposable
         this.addonLayer = addonLayer;
         this.fg = fg;
         this.bg = bg;
-        captureSentinels = (AtkUICommandClipMaskGB*)NativeMemory.AllocZeroed(SentinelCount * (nuint)sizeof(AtkUICommandClipMaskGB));
+        captureSentinels = (AtkUICommandClipMask*)NativeMemory.AllocZeroed(SentinelCount * (nuint)sizeof(AtkUICommandClipMask));
     }
 
     public void Begin(AtkServer* self)
@@ -40,24 +40,24 @@ internal sealed unsafe class CaptureInjector : IDisposable
         if (CollectDiagnostics) Runs = "";
         if (!config.Enable || fg.IsNull || bg.IsNull) return;
 
-        var list = self->UICommandListGB;
-        var count = self->UICommandCountGB;
+        var list = self->UICommandList;
+        var count = self->UICommandCount;
         if (list == null || count == 0 || count > self->UICommandPoolSize) return;
 
-        BuildBgList(new Span<AtkUICommandEntryGB>(list, (int)count), out var newList, out var newCount);
+        BuildBgList(new Span<AtkUICommandEntry>(list, (int)count), out var newList, out var newCount);
 
         prevList = list;
         prevCount = count;
-        self->UICommandListGB = newList;
-        self->UICommandCountGB = newCount;
+        self->UICommandList = newList;
+        self->UICommandCount = newCount;
         active = true;
     }
 
     public void End(AtkServer* self)
     {
         if (!active) return;
-        self->UICommandListGB = prevList;
-        self->UICommandCountGB = prevCount;
+        self->UICommandList = prevList;
+        self->UICommandCount = prevCount;
         active = false;
     }
 
@@ -76,7 +76,7 @@ internal sealed unsafe class CaptureInjector : IDisposable
         }
     }
 
-    private int GetGroup(ref AtkUICommandEntryGB e)
+    private int GetGroup(ref AtkUICommandEntry e)
         => e.IsDepthPriority ? GroupBgDepth : addonLayer.IsBackground(e.AddonHash) ? GroupBg : GroupFg;
 
     private static string GroupName(int group) => group switch
@@ -87,7 +87,7 @@ internal sealed unsafe class CaptureInjector : IDisposable
         _ => $"Unk{group}",
     };
 
-    private void BuildBgList(Span<AtkUICommandEntryGB> src, out AtkUICommandEntryGB* newList, out uint newCount)
+    private void BuildBgList(Span<AtkUICommandEntry> src, out AtkUICommandEntry* newList, out uint newCount)
     {
         captureSentinels[GroupBeaconFront].InitSentinel(bg.NativeTex, true, offset: 0);
         captureSentinels[GroupBgDepth].InitSentinel(bg.NativeTex, true, offset: 1);
@@ -122,22 +122,22 @@ internal sealed unsafe class CaptureInjector : IDisposable
         {
             if (entriesBuffer != null) NativeMemory.Free(entriesBuffer);
             entriesCapacity = outCount + 100;
-            entriesBuffer = (AtkUICommandEntryGB*)NativeMemory.Alloc((nuint)(entriesCapacity * sizeof(AtkUICommandEntryGB)));
+            entriesBuffer = (AtkUICommandEntry*)NativeMemory.Alloc((nuint)(entriesCapacity * sizeof(AtkUICommandEntry)));
         }
-        var dst = new Span<AtkUICommandEntryGB>(entriesBuffer, entriesCapacity);
+        var dst = new Span<AtkUICommandEntry>(entriesBuffer, entriesCapacity);
 
         int j = 0;
-        dst[j++].Command = (AtkUICommandGB*)&captureSentinels[GroupBeaconFront];
+        dst[j++].Command = (AtkUICommand*)&captureSentinels[GroupBeaconFront];
         for (int i = 0; i < beaconEnd; i++)
             dst[j++] = src[i];
-        dst[j++].Command = (AtkUICommandGB*)&captureSentinels[GroupBgDepth];
+        dst[j++].Command = (AtkUICommand*)&captureSentinels[GroupBgDepth];
         prevGroup = GroupBgDepth;
         for (int i = beaconEnd; i < src.Length; i++)
         {
             int group = GetGroup(ref src[i]);
             if (group != prevGroup)
             {
-                dst[j++].Command = (AtkUICommandGB*)&captureSentinels[group];
+                dst[j++].Command = (AtkUICommand*)&captureSentinels[group];
                 prevGroup = group;
             }
             dst[j++] = src[i];
