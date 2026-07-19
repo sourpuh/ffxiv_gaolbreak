@@ -54,6 +54,8 @@ internal sealed unsafe class RestBeaconAddon : IDisposable
         addon->UldManager.ResourceFlags |= AtkUldManagerResourceFlag.Initialized;
         BuildNodes(addon);
 
+        // Exclude the addon from mouse collision.
+        addon->Flags1A3 |= 0x80;
         // These bits gate various game functions from adjusting visibility.
         addon->Flags1B4 |= 0x00E00000;
         addon->DisableCloseOnLoadScreen = true;
