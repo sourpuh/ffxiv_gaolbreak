@@ -17,7 +17,8 @@ internal class IndicatorWindow : OverlayWindow
         this.onRightClick = onRightClick;
     }
 
-    protected override ImGuiWindowFlags ExtraWindowFlags() => ImGuiWindowFlags.AlwaysAutoResize;
+    protected override ImGuiWindowFlags ExtraWindowFlags() => ImGuiWindowFlags.AlwaysAutoResize
+        | (config.EnableIndicator ? ImGuiWindowFlags.None : ImGuiWindowFlags.NoInputs);
 
     protected override void DrawContent(ImDrawListPtr dl)
     {
