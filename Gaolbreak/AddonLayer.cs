@@ -38,7 +38,7 @@ internal unsafe class AddonLayer(Config config, IGameGui gameGui, ICondition con
     private uint MaxBackgroundDepthLayer =>
         condition[ConditionFlag.CreatingCharacter] ? MaxBackgroundDepthLayerCharacterCreator
         : Gate.IsDCSelection() ? MaxBackgroundDepthLayerDCSelector
-        : Gate.IsTitleScreen() && Gate.IsTitleMenu() ? MaxBackgroundDepthLayerTitleScreen
+        : Gate.IsTitleMenu() || Gate.IsCharacterSelect() ? MaxBackgroundDepthLayerTitleScreen
         : MaxBackgroundDepthLayerDefault;
 
     public void OnAddonPostShow(AddonEvent type, AddonArgs args)

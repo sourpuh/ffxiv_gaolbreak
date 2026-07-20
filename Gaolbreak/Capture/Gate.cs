@@ -26,7 +26,7 @@ internal static unsafe class Gate
     public static bool IsInCutscene()
         => !Plugin.ClientState.IsGPosing && Plugin.Condition[ConditionFlag.WatchingCutscene] || Plugin.Condition[ConditionFlag.OccupiedInCutSceneEvent] || Plugin.Condition[ConditionFlag.WatchingCutscene78];
 
-    public static bool IsTransition() => IsUiFading() && !IsTitleScreen();
+    public static bool IsTransition() => IsUiFading() && !(IsTitleScreen() || IsCharacterSelect());
 
     private static bool IsUiFading()
     {
@@ -55,7 +55,12 @@ internal static unsafe class Gate
 
     public static bool IsTitleScreen()
     {
-        return IsAddonVisible("Title") || IsAddonVisible("CharaSelect");
+        return IsAddonVisible("Title");
+    }
+
+    public static bool IsCharacterSelect()
+    {
+        return IsAddonVisible("CharaSelect");
     }
 
     private static bool IsAddonVisible(string addonName)
