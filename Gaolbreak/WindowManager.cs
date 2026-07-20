@@ -47,7 +47,7 @@ internal unsafe class WindowManager(Config config)
         for (int i = drawOrder.Count - 1; i >= 0; i--)
         {
             var w = drawOrder[i];
-            if (w.Hidden) continue;
+            if (w.Hidden || !w.WasActive) continue;
             if (filter && (w.Flags & (ImGuiWindowFlags.ChildWindow | ImGuiWindowFlags.Popup | ImGuiWindowFlags.Tooltip)) != 0) continue;
             result.Add((j++, w, lastFocusedWindow == w));
         }
