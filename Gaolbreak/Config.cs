@@ -1,20 +1,20 @@
-using Dalamud.Bindings.ImGui;
 using Dalamud.Configuration;
 using Dalamud.Plugin;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 
 namespace Gaolbreak;
 
-internal sealed class Config
+internal sealed partial class Config
 {
     private readonly IDalamudPluginInterface pluginInterface;
     private readonly DynamicConfig dynamicCfg;
     private readonly Data data;
 
-    public Config(IDalamudPluginInterface pluginInterface, DynamicConfig remote)
+    public Config(IDalamudPluginInterface pluginInterface, DynamicConfig dynamicCfg)
     {
         this.pluginInterface = pluginInterface;
-        this.dynamicCfg = remote;
+        this.dynamicCfg = dynamicCfg;
+        dynamicCfg.OnUpdated += DynamicConfigUpdated;
         Data? loaded = null;
         try
         {
@@ -35,6 +35,7 @@ internal sealed class Config
         public bool EnableReorder { get; set; } = true;
         public bool EnableIndicator { get; set; } = true;
         public bool EnableToneAdjust { get; set; } = true;
+        public Dictionary<string, HashSet<uint>> Pins { get; set; } = new();
     }
 
     private void Save()
@@ -77,25 +78,12 @@ internal sealed class Config
         }
     }
 
-    public bool IsAlwaysLifted(ImGuiWindowPtr w)
-    {
-        var cfg = dynamicCfg.Current;
-        if (cfg.ForegroundWindowIds.Contains(w.ID)) return true;
-        var name = w.GetName();
-        foreach (var prefix in cfg.ForegroundWindowPrefixes)
-            if (name.StartsWith(prefix, StringComparison.Ordinal)) return true;
-        return false;
-    }
-
     public bool IsAddonLiftable(string addonName)
     {
-        var set = HudMoveable();
-        if (set.Count == 0) return false;
-        if (set.Contains(addonName)) return true;
+        var moveableAddons = HudMoveable();
+        if (moveableAddons.Contains(addonName)) return true;
         if (addonName.StartsWith("ChatLog", StringComparison.Ordinal)) return true;
-        int end = addonName.Length;
-        while (end > 0 && char.IsAsciiDigit(addonName[end - 1])) end--;
-        return end != addonName.Length && set.Contains(addonName[..end]);
+        return false;
     }
 
     private HashSet<string>? hudMoveable;
@@ -118,8 +106,4 @@ internal sealed class Config
         hudMoveable = set;
         return set;
     }
-
-    private IReadOnlyDictionary<string, IReadOnlySet<uint>> DefaultPins => dynamicCfg.Current.DefaultPins;
-
-    public IEnumerable<uint> GetPinnedWindows(string addon) => DefaultPins.TryGetValue(addon, out var pins) ? pins : [];
 }

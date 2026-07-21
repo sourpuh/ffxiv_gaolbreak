@@ -1,4 +1,5 @@
 using Dalamud.Plugin;
+using System.Text.RegularExpressions;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -6,9 +7,8 @@ namespace Gaolbreak;
 
 internal sealed class DynamicConfigData
 {
-    public IReadOnlySet<uint> ForegroundWindowIds { get; init; } = new HashSet<uint>();
-    public IReadOnlySet<string> ForegroundWindowPrefixes { get; init; } = new HashSet<string>();
     public IReadOnlyDictionary<string, IReadOnlySet<uint>> DefaultPins { get; init; } = new Dictionary<string, IReadOnlySet<uint>>();
+    public IReadOnlyDictionary<string, IReadOnlyList<Regex>> DefaultPinMatchers { get; init; } = new Dictionary<string, IReadOnlyList<Regex>>();
 }
 
 internal sealed class DynamicConfig : IDisposable
@@ -29,9 +29,12 @@ internal sealed class DynamicConfig : IDisposable
 
     public DynamicConfigData Current => current;
 
+    public event Action? OnUpdated;
+
     public DynamicConfig(IDalamudPluginInterface plugin)
     {
         current = Parse(ReadEmbeddedDefault(plugin));
+        OnUpdated?.Invoke();
         _ = LoadAsync();
     }
 
@@ -39,7 +42,15 @@ internal sealed class DynamicConfig : IDisposable
     {
         var remote = await TryLoadGitHubAsync();
         if (disposed) return;
+        ApplyRemote(remote);
+    }
+
+    private void ApplyRemote(DynamicConfigData remote)
+    {
+#if !DEBUG
         current = remote;
+#endif
+        OnUpdated?.Invoke();
     }
 
     private async Task<DynamicConfigData> TryLoadGitHubAsync()
@@ -65,20 +76,35 @@ internal sealed class DynamicConfig : IDisposable
     private sealed class Dto
     {
         public int Version { get; set; }
-        public HashSet<uint>? ForegroundWindowIds { get; set; }
-        public HashSet<string>? ForegroundWindowPrefixes { get; set; }
         public Dictionary<string, HashSet<uint>>? DefaultPins { get; set; }
+        public Dictionary<string, List<string>>? DefaultPinPatterns { get; set; }
     }
 
     private static DynamicConfigData Parse(string yaml)
     {
         var dto = Yaml.Deserialize<Dto>(yaml) ?? new Dto();
         if (dto.Version != 1) throw new InvalidDataException($"Unsupported Dynamic Config version {dto.Version}");
+        var addonMatchers = new Dictionary<string, IReadOnlyList<Regex>>();
+        foreach (var (anchor, patterns) in dto.DefaultPinPatterns ?? new())
+        {
+            var matchers = new List<Regex>();
+            foreach (var pattern in patterns)
+            {
+                try
+                {
+                    matchers.Add(new Regex(pattern, RegexOptions.Compiled | RegexOptions.CultureInvariant));
+                }
+                catch (Exception e)
+                {
+                    Plugin.Log.Warning(e, $"Bad pin pattern '{pattern}'");
+                }
+            }
+            addonMatchers[anchor] = matchers;
+        }
         return new DynamicConfigData
         {
-            ForegroundWindowIds = dto.ForegroundWindowIds ?? [],
-            ForegroundWindowPrefixes = dto.ForegroundWindowPrefixes ?? [],
             DefaultPins = (dto.DefaultPins ?? new()).ToDictionary(kvp => kvp.Key, kvp => (IReadOnlySet<uint>)kvp.Value),
+            DefaultPinMatchers = addonMatchers,
         };
     }
 

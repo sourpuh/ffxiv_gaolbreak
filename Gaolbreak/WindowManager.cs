@@ -31,6 +31,7 @@ internal unsafe class WindowManager(Config config)
         foreach (var w in ctx.Windows)
         {
             drawOrder.Add(w);
+            config.ResolvePinPatterns(w);
         }
         lastFocusedWindow = ctx.WindowsFocusOrder.LastOrDefault();
     }
@@ -48,7 +49,7 @@ internal unsafe class WindowManager(Config config)
         {
             var w = drawOrder[i];
             if (w.Hidden || !w.WasActive) continue;
-            if (filter && (w.Flags & (ImGuiWindowFlags.ChildWindow | ImGuiWindowFlags.Popup | ImGuiWindowFlags.Tooltip)) != 0) continue;
+            if (filter && !IsTopLevel(w)) continue;
             result.Add((j++, w, lastFocusedWindow == w));
         }
         return result;
@@ -64,16 +65,23 @@ internal unsafe class WindowManager(Config config)
         if (string.IsNullOrEmpty(addonName)) return;
         foreach (var id in config.GetPinnedWindows(addonName))
         {
+            if (!config.IsPinnedToAddon(id)) continue;
             pendingLifts.Add(id);
         }
     }
 
-    public void ProcessPinLifts()
+    public void ProcessReordering()
     {
-        ImGuiWindowPtr overlay = fgOverlay.GetNativeWindow();
-        if (overlay.IsNull) { pendingLifts.Clear(); return; }
+        ProcessAddonPins();
+        EnforceLayerPins();
+    }
 
-        int overlayIdx = DrawOrder(overlay);
+    private void ProcessAddonPins()
+    {
+        ImGuiWindowPtr fgWindow = fgOverlay.GetNativeWindow();
+        if (fgWindow.IsNull) { pendingLifts.Clear(); return; }
+
+        int overlayIdx = DrawOrder(fgWindow);
         if (overlayIdx < 0) { pendingLifts.Clear(); return; }
 
         liftBuffer.Clear();
@@ -81,20 +89,105 @@ internal unsafe class WindowManager(Config config)
         {
             var w = drawOrder[i];
             if (w.IsNull) continue;
-            if (pendingLifts.Contains(w.ID) || config.IsAlwaysLifted(w))
+            if (pendingLifts.Contains(w.ID))
                 liftBuffer.Add(w);
         }
         pendingLifts.Clear();
-        if (liftBuffer.Count == 0) return;
-
-        bool hasFront = overlayIdx + 1 < drawOrder.Count;
-        ImGuiWindowPtr frontNeighbor = hasFront ? drawOrder[overlayIdx + 1] : default;
-        foreach (var w in liftBuffer)
+        if (liftBuffer.Count > 0)
         {
-            if (hasFront)
-                CImGui.igBringWindowToDisplayBehind(w.Handle, frontNeighbor.Handle);
+            ImGuiWindowPtr frontNeighbor = overlayIdx + 1 < drawOrder.Count ? drawOrder[overlayIdx + 1] : default;
+            foreach (var w in liftBuffer)
+            {
+                if (!frontNeighbor.IsNull)
+                    CImGui.igBringWindowToDisplayBehind(w.Handle, frontNeighbor.Handle);
+                else
+                    CImGui.igBringWindowToDisplayFront(w.Handle);
+            }
+        }
+    }
+
+    private void EnforceLayerPins()
+    {
+        if (!OverlaysActive())
+            return;
+        bool seenRegular = false;
+        foreach (var w in drawOrder)
+        {
+            if (!IsTopLevel(w)) continue;
+            if (config.TryGetPinAnchor(w.ID, out var anchor) && anchor == Config.BelowAllAnchor)
+            {
+                if (seenRegular) CImGui.igBringWindowToDisplayBehind(w.Handle, bgOverlay.GetNativeWindow().Handle);
+            }
             else
-                CImGui.igBringWindowToDisplayFront(w.Handle);
+                seenRegular = true;
+        }
+
+        liftBuffer.Clear();
+        seenRegular = false;
+        for (int i = drawOrder.Count - 1; i >= 0; i--)
+        {
+            var w = drawOrder[i];
+            if (!IsTopLevel(w)) continue;
+            if (config.TryGetPinAnchor(w.ID, out var anchor) && anchor == Config.AboveAllAnchor)
+            {
+                if (seenRegular) liftBuffer.Add(w);
+            }
+            else
+                seenRegular = true;
+        }
+        liftBuffer.Reverse();
+        foreach (var w in liftBuffer)
+            CImGui.igBringWindowToDisplayFront(w.Handle);
+    }
+
+    private bool OverlaysActive()
+    {
+        var fg = fgOverlay.GetNativeWindow();
+        var bg = bgOverlay.GetNativeWindow();
+        return !fg.IsNull && !bg.IsNull && fg.WasActive && bg.WasActive;
+    }
+
+    public bool TryGetPinnableAnchor(ImGuiWindowPtr window, out string anchor)
+    {
+        anchor = "";
+        if (!OverlaysActive()) return false;
+
+        if (IsInFront(window, fgOverlay.GetNativeWindow()))
+            anchor = Config.AboveAllAnchor;
+        else if (IsInFront(bgOverlay.GetNativeWindow(), window))
+            anchor = Config.BelowAllAnchor;
+        else
+            return false; // nothing to anchor to between the overlays
+        return true;
+    }
+
+    private static bool IsTopLevel(ImGuiWindowPtr w) =>
+        !w.IsNull && !w.Hidden
+        && (w.Flags & (ImGuiWindowFlags.ChildWindow | ImGuiWindowFlags.Popup | ImGuiWindowFlags.Tooltip)) == 0;
+
+    public ImGuiWindowPtr FindWindow(uint id)
+    {
+        foreach (var w in drawOrder)
+            if (!w.IsNull && w.ID == id) return w;
+        return default;
+    }
+
+    public void MoveWindowTo(ImGuiWindowPtr window, ImGuiWindowPtr target)
+    {
+        if (window.IsNull || target.IsNull || window == target) return;
+        int src = DrawOrder(window), dst = DrawOrder(target);
+        if (src < 0 || dst < 0) return;
+
+        if (src > dst)
+        {
+            CImGui.igBringWindowToDisplayBehind(window.Handle, target.Handle);
+        }
+        else
+        {
+            if (dst + 1 < drawOrder.Count)
+                CImGui.igBringWindowToDisplayBehind(window.Handle, drawOrder[dst + 1].Handle);
+            else
+                CImGui.igBringWindowToDisplayFront(window.Handle);
         }
     }
 
@@ -116,7 +209,7 @@ internal unsafe class WindowManager(Config config)
         return ia.CompareTo(ib);
     }
 
-    public static bool IsHoverEligible(ImGuiWindowPtr w) =>
+    private static bool IsHoverEligible(ImGuiWindowPtr w) =>
         !w.IsNull && w.WasActive && !w.Hidden
         && (w.Flags & (ImGuiWindowFlags.NoMouseInputs | ImGuiWindowFlags.ChildWindow
                        | ImGuiWindowFlags.Popup | ImGuiWindowFlags.Tooltip | ImGuiWindowFlags.NoNav)) == 0;

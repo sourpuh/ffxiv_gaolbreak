@@ -144,10 +144,12 @@ public sealed class Plugin : IDalamudPlugin
                 }
             }
 
-            // Re-snapshot the draw order so EnforcePinned sees the overlay's just-applied bring-to-front.
-            windowManager.Update();
             if (config.EnableReorder)
-                windowManager.ProcessPinLifts();
+            {
+                // Re-snapshot the draw order so ProcessReordering sees the overlay's just-applied bring-to-front.
+                windowManager.Update();
+                windowManager.ProcessReordering();
+            }
         }
         catch (Exception e)
         {

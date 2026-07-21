@@ -1,4 +1,6 @@
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
+using Dalamud.Interface.Components;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
@@ -11,7 +13,7 @@ namespace Gaolbreak;
 
 internal sealed class ConfigWindow : Window
 {
-    private const string NullAddonName = "(none)";
+    private const uint OverlayHighlight = 0x6700FFFF;
     private readonly Config config;
     private readonly Capturer capturer;
     private readonly UIOverlayWindow fgOverlay;
@@ -22,6 +24,7 @@ internal sealed class ConfigWindow : Window
     private bool filterWindows = true;
     private bool filterAddonsVisible = true;
     private Vector4 captureBackdrop = Vector4.Zero;
+    private readonly RowDragDrop<uint> windowRowDragDrop;
 
     public ConfigWindow(string name, Config config, Capturer capturer, UIOverlayWindow fgOverlay, OverlayWindow bgOverlay, AddonLayer addonLayer, WindowManager windowManager)
         : base(name)
@@ -32,30 +35,41 @@ internal sealed class ConfigWindow : Window
         this.bgOverlay = bgOverlay;
         this.addonLayer = addonLayer;
         this.windowManager = windowManager;
-        IsOpen = false;
+        windowRowDragDrop = new RowDragDrop<uint>(
+            "GB_WINDOW_ID",
+            landsBelow: (source, target) => windowManager.IsInFront(windowManager.FindWindow(source), windowManager.FindWindow(target)),
+            onDrop: (source, target) =>
+            {
+                windowManager.MoveWindowTo(windowManager.FindWindow(source), windowManager.FindWindow(target));
+                config.ClearPin(source);
+            });
         SizeCondition = ImGuiCond.FirstUseEver;
         Size = new Vector2(960, 540);
     }
 
     public override void Draw()
     {
-        bool enable = config.Enable;
-        if (ImGui.Checkbox("Enable", ref enable))
-            config.Enable = enable;
+        bool killed = !config.Enable;
+        if (ImGui.Checkbox("Killswitch", ref killed))
+            config.Enable = !killed;
         ImGui.SameLine();
-        bool reorder = config.EnableReorder;
-        if (ImGui.Checkbox("Reorder On Click", ref reorder))
-            config.EnableReorder = reorder;
+        bool layer = config.EnableReorder;
+        if (ImGui.Checkbox("Layer", ref layer))
+            config.EnableReorder = layer;
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Layer native UI with ImGui windows.");
         ImGui.SameLine();
         bool indicator = config.EnableIndicator;
         if (ImGui.Checkbox("Indicator", ref indicator))
             config.EnableIndicator = indicator;
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Show status indicator / killswitch dot.");
         ImGui.SameLine();
         bool toneAdjust = config.EnableToneAdjust;
         if (ImGui.Checkbox("Tone Adjust", ref toneAdjust))
             config.EnableToneAdjust = toneAdjust;
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Apply gamma and color filter to the capture.");
+            ImGui.SetTooltip("Apply gamma and color filter to the UI.");
 
 
         if (!ImGui.BeginTabBar("##gaolbreak_tabs")) return;
@@ -183,6 +197,7 @@ internal sealed class ConfigWindow : Window
 
     private void DrawWindowsTab()
     {
+        var self = ImGui.GetCurrentContext().CurrentWindow;
         ImGui.Checkbox("Filter windows", ref filterWindows);
         ImGui.SameLine();
         ImGui.TextDisabled(filterWindows ? "(filtered to top-level windows)" : "(filter off — including child/popup/tooltip)");
@@ -194,9 +209,10 @@ internal sealed class ConfigWindow : Window
             ImGuiTableFlags.Resizable |
             ImGuiTableFlags.SizingStretchSame;
 
-        if (!ImGui.BeginTable("##windows_list", 6, flags)) return;
+        if (!ImGui.BeginTable("##windows_list", 7, flags)) return;
 
         ImGui.TableSetupScrollFreeze(0, 1);
+        ImGui.TableSetupColumn("Pin", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize);
         ImGui.TableSetupColumn("Layer", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize);
         ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize);
         ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
@@ -205,12 +221,15 @@ internal sealed class ConfigWindow : Window
         ImGui.TableSetupColumn("Size", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize);
         ImGui.TableHeadersRow();
 
+        windowRowDragDrop.Begin();
         var rows = windowManager.GetVisibleWindows(filterWindows);
         foreach (var row in rows)
         {
             var w = row.window;
-            if (config.IsAlwaysLifted(w)) continue;
-            DrawWindowRow(row.index, w, row.focused);
+            // Skip self to avoid awkward re-ordering when refocusing to pin
+            if (w == self) continue;
+            using (ImRaii.PushId(unchecked((int)w.ID)))
+                DrawWindowRow(row.index, w, row.focused);
         }
 
         ImGui.EndTable();
@@ -264,7 +283,7 @@ internal sealed class ConfigWindow : Window
                 using var greyed = ImRaii.PushColor(ImGuiCol.Text, 0xFF808080u, !a.Visible);
 
                 ImGui.TableNextColumn();
-                if (ImGui.SmallButton($"copy##addon{idx}"))
+                if (ImGuiComponents.IconButton($"copy##addon{idx}", FontAwesomeIcon.Copy))
                     ImGui.SetClipboardText(a.Name);
                 ImGui.SameLine();
                 ImGui.Selectable($"{a.Name}##addon{idx}", false, ImGuiSelectableFlags.SpanAllColumns);
@@ -295,19 +314,63 @@ internal sealed class ConfigWindow : Window
 
         if (isOverlay)
         {
-            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, 0x6700FFFF);
+            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, OverlayHighlight);
         }
         else if (focused)
         {
             ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, GetStyleColor(ImGuiCol.TabActive));
+        }
+        ImGui.TableNextColumn();
+        using var row = windowRowDragDrop.Row(w.ID, w.Name, !isOverlay);
+        if (!isOverlay)
+        {
+            bool pinned = config.IsUserPinned(w.ID);
+            bool defaultPinned = !pinned && config.TryGetPinAnchor(w.ID, out _);
+            bool canPin = windowManager.TryGetPinnableAnchor(w, out var possibleAnchor);
+
+            using (ImRaii.PushColor(ImGuiCol.Button, GetStyleColor(ImGuiCol.TabActive), pinned))
+            using (ImRaii.PushColor(ImGuiCol.Button, OverlayHighlight, defaultPinned))
+            using (ImRaii.Disabled(!pinned && !canPin))
+            {
+                if (ImGuiComponents.IconButton("pin", FontAwesomeIcon.Thumbtack))
+                {
+                    if (pinned)
+                        config.ClearPin(w.ID);
+                    else if (canPin)
+                        config.SetPin(w.ID, possibleAnchor);
+                }
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(config.TryGetPinAnchor(w.ID, out var pinnedAnchor)
+                    ? pinnedAnchor switch
+                    {
+                        Config.AboveAllAnchor => "Pinned above all addons",
+                        Config.BelowAllAnchor => "Pinned below all addons",
+                        _ => $"Pinned to {pinnedAnchor}",
+                    }
+                    : possibleAnchor switch
+                    {
+                        Config.AboveAllAnchor => "Pin above all addons",
+                        Config.BelowAllAnchor => "Pin below all addons",
+                        _ => $"Pin to {possibleAnchor}"
+                    });
+            }
+        }
+        else
+        {
+            using (ImRaii.Disabled())
+                ImGuiComponents.IconButton("pin_disabled", FontAwesomeIcon.Ban);
         }
 
         ImGui.TableNextColumn();
         ImGui.TextUnformatted(i.ToString());
 
         ImGui.TableNextColumn();
-        if (ImGui.SmallButton($"copy##{i}"))
+        if (ImGuiComponents.IconButton("copy", FontAwesomeIcon.Copy))
             ImGui.SetClipboardText($"0x{w.ID:X8}");
+
         ImGui.SameLine();
         ImGui.TextUnformatted($"{w.ID:X8}");
 
