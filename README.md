@@ -18,7 +18,7 @@ A [Dalamud](https://github.com/goatcorp/Dalamud) plugin that breaks FFXIV's UI o
 <br clear="right"/>
 
 ## Pins
-Some plugins create ImGui windows that are intended to appear "attached" to native UI Addons, such as ImGui overlay buttons or attached side windows. Without Gaolbreak, these plugins will always draw on top of the native UI. With Gaolbreak, these can get lost underneath Addons or have confusing layering. If you report these plugins, they can be fixed; follow these steps:
+Some plugins create ImGui windows that are intended to appear "attached" to native UI Addons, such as ImGui overlay buttons or attached side windows. Without Gaolbreak, these plugins will always draw on top of the native UI. With Gaolbreak, these can get lost underneath Addons or have confusing layering. You can pin plugin windows above the native UI in Gaolbreak's config. If you report these plugins, they can be fixed for everyone; follow these steps:
 
 1. Open Gaolbreak's config UI.
 2. Go to the "Windows" tab.
@@ -35,7 +35,8 @@ Some plugins create ImGui windows that are intended to appear "attached" to nati
 As an example of what you need to provide, WaymarkPresetPlugin's window ID is `0x3E3947D9` and it attaches to the Addon named `FieldMarker`.
 
 ## Known issues
-* None
+* Windows pinned to specific addons are hidden if any other addon is brought to the Foreground, even if the window is not occluded
+  * This will be fixed with occlusion checks and/or splitting the FG into multiple windows.
 
 ## Support
 If you found a bug or have suggestions for the plugin, please do one of the following:
