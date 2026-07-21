@@ -17,13 +17,10 @@ internal class IndicatorWindow : OverlayWindow
         this.onRightClick = onRightClick;
     }
 
-    protected override ImGuiWindowFlags ExtraWindowFlags() => ImGuiWindowFlags.AlwaysAutoResize
-        | (config.EnableIndicator ? ImGuiWindowFlags.None : ImGuiWindowFlags.NoInputs);
+    protected override ImGuiWindowFlags ExtraWindowFlags() => ImGuiWindowFlags.AlwaysAutoResize;
 
     protected override void DrawContent(ImDrawListPtr dl)
     {
-        if (!config.EnableIndicator) return;
-
         string? inactiveReason = capture.InactiveReason();
         bool broken = capture.HooksBroken;
         uint dotColor = broken ? 0xFF00A5FFu

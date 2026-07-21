@@ -123,7 +123,8 @@ public sealed class Plugin : IDalamudPlugin
         {
             windowSystem.Draw();
 
-            indicator.Draw();
+            if (config.EnableIndicator)
+                indicator.Draw();
             if (!config.Enable)
             {
                 return;
