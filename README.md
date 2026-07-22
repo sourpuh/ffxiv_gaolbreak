@@ -37,6 +37,9 @@ As an example of what you need to provide, WaymarkPresetPlugin's window ID is `0
 ## Known issues
 * Windows pinned to specific addons are hidden if any other addon is brought to the Foreground, even if the window is not occluded
   * This will be fixed with occlusion checks and/or splitting the FG into multiple windows.
+* Some plugins draw using the "background" drawlist instead of a window drawlist. Background draws go under all windows, including Gaolbreak. These plugins must be changed to be compatible.
+  * https://github.com/una-xiv/umbra/issues/467
+  * https://github.com/chalkos/RepairMe/issues/44
 
 ## Support
 If you found a bug or have suggestions for the plugin, please do one of the following:
